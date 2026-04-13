@@ -173,9 +173,10 @@ export class TransportClient {
     reqPath: string,
     body?: Buffer | Readable,
     contentType = 'application/octet-stream',
+    extraHeaders: Record<string, string> = {},
   ): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = { ...extraHeaders };
       if (body instanceof Buffer) {
         headers['Content-Type'] = contentType;
         headers['Content-Length'] = String(body.length);

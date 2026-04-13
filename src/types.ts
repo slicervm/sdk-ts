@@ -154,6 +154,45 @@ export interface FSMkdirRequest {
   mode?: string;
 }
 
+export type FSWatchEventType = 'create' | 'write' | 'remove' | 'rename' | 'chmod';
+
+export interface FSWatchRequest {
+  /** Absolute paths inside the VM to watch. At least one is required. */
+  paths: string[];
+  /** Optional glob patterns to filter event paths (e.g. `["*.go", "bin/*"]`). */
+  patterns?: string[];
+  /**
+   * Restrict to a subset of event types. When omitted, all types are delivered.
+   */
+  events?: FSWatchEventType[];
+  /** UID used by the agent to resolve `~` in paths. Default: 0 (root). */
+  uid?: number;
+  /** Watch directories recursively. */
+  recursive?: boolean;
+  /** Stop the stream after the first matching event. */
+  oneShot?: boolean;
+  /** Coalesce events arriving within this window. Go-duration string e.g. `"100ms"`. */
+  debounce?: string;
+  /** Server-side wall-clock cap on the stream. Go-duration string e.g. `"5m"`. */
+  timeout?: string;
+  /** Stop after delivering this many events. */
+  maxEvents?: number;
+  /** Forwarded as the SSE `Last-Event-ID` header for cross-connection resume. */
+  lastEventId?: string;
+}
+
+export interface FSWatchEvent {
+  /** Monotonic per-stream ID (from the SSE `id:` line). */
+  id: number;
+  type: FSWatchEventType | string;
+  path: string;
+  /** RFC3339Nano string (when present). */
+  timestamp: string;
+  size: number;
+  isDir: boolean;
+  message?: string;
+}
+
 export interface ShutdownRequest {
   action?: 'shutdown' | 'reboot';
 }

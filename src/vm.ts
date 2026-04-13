@@ -14,6 +14,8 @@ import {
   type ExecResultBinary,
   type FSEntry,
   type FSMkdirRequest,
+  type FSWatchEvent,
+  type FSWatchRequest,
   type ShutdownRequest,
   SlicerAPIError,
   type VMLogs,
@@ -124,6 +126,94 @@ export class VMFileSystem {
       'application/x-tar',
     );
     for await (const _ of res as AsyncIterable<Buffer>) void _;
+  }
+
+  /**
+   * Open a Server-Sent Events stream of filesystem events from the VM.
+   * Yields one `FSWatchEvent` per agent-side event. The stream stays open
+   * until the supplied request's `timeout` / `maxEvents` is hit, the daemon
+   * tears it down, or the caller breaks out of the loop.
+   *
+   * Heartbeat SSE comments and named `event:` lines are silently dropped.
+   *
+   * Example:
+   * ```ts
+   * for await (const e of vm.fs.watch({ paths: ['/tmp'], recursive: true })) {
+   *   console.log(e.type, e.path);
+   * }
+   * ```
+   */
+  async *watch(req: FSWatchRequest): AsyncGenerator<FSWatchEvent, void, void> {
+    if (!req.paths || req.paths.length === 0) {
+      throw new Error('vm.fs.watch: paths is required');
+    }
+    const q = new URLSearchParams();
+    for (const p of req.paths) if (p) q.append('paths', p);
+    for (const p of req.patterns ?? []) if (p) q.append('patterns', p);
+    for (const e of req.events ?? []) if (e) q.append('events', e);
+    if (req.uid !== undefined && req.uid !== 0) q.set('uid', String(req.uid));
+    if (req.recursive) q.set('recursive', 'true');
+    if (req.oneShot) q.set('one_shot', 'true');
+    if (req.debounce) q.set('debounce', req.debounce);
+    if (req.timeout) q.set('timeout', req.timeout);
+    if (req.maxEvents !== undefined && req.maxEvents > 0) {
+      q.set('max_events', String(req.maxEvents));
+    }
+
+    const extraHeaders: Record<string, string> = { Accept: 'text/event-stream' };
+    if (req.lastEventId) extraHeaders['Last-Event-ID'] = req.lastEventId;
+
+    const res = await this.transport.requestStreamRaw(
+      'GET',
+      `/vm/${encodeURIComponent(this.hostname)}/fs/watch?${q.toString()}`,
+      undefined,
+      undefined,
+      extraHeaders,
+    );
+
+    res.setEncoding('utf8');
+    let buffer = '';
+    let dataLines: string[] = [];
+    let pendingId = 0;
+
+    for await (const chunk of res as AsyncIterable<string>) {
+      buffer += chunk;
+      let nl: number;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const raw = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+        if (line === '') {
+          if (dataLines.length > 0) {
+            const payload = dataLines.join('\n');
+            dataLines = [];
+            try {
+              const parsed = JSON.parse(payload) as Partial<FSWatchEvent>;
+              const evt: FSWatchEvent = {
+                id: typeof parsed.id === 'number' && parsed.id !== 0 ? parsed.id : pendingId,
+                type: parsed.type ?? '',
+                path: parsed.path ?? '',
+                timestamp: parsed.timestamp ?? '',
+                size: parsed.size ?? 0,
+                isDir: parsed.isDir ?? false,
+                ...(parsed.message !== undefined && { message: parsed.message }),
+              };
+              yield evt;
+            } catch {
+              /* skip malformed payload */
+            }
+          }
+        } else if (line.startsWith(':')) {
+          /* heartbeat comment, ignore */
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).replace(/^ /, ''));
+        } else if (line.startsWith('id:')) {
+          const v = parseInt(line.slice(3).trim(), 10);
+          if (!Number.isNaN(v)) pendingId = v;
+        }
+        /* `event:` lines ignored — the server only uses one event type. */
+      }
+    }
   }
 
   /** Download `path` from the VM as a tar archive. */
