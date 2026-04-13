@@ -6,15 +6,10 @@ Test targets: local Slicer-for-Mac at `~/slicer-mac/slicer.sock` (default) and L
 
 Terminology: Slicer primitives only — host groups, nodes/VMs, exec, fs, snapshots, suspend/restore/relaunch. No "sandbox" at this layer.
 
-Shape: **grouped** `SlicerClient` with `hostGroups`, `vms`, `secrets` namespaces plus per-VM operations on a `VM` handle (`vm.exec`, `vm.fs.*`, `vm.pause/resume/suspend/restore/shutdown/relaunch/delete`, `vm.health/logs`, `vm.waitForAgent`). Inspired by `@e2b` and `modal-labs/libmodal` (not Vercel's flat shape — see "SDK shape decision" below). `Node` renamed to `VM` throughout the TS surface (the Go SDK uses "Node"; TS reads better as "VM"). TypeScript source, dual ESM+CJS build via tsup. Node 18+.
+Shape: **grouped** `SlicerClient` with `hostGroups`, `vms`, `secrets` namespaces plus per-VM operations on a `VM` handle (`vm.exec`, `vm.fs.*`, `vm.pause/resume/suspend/restore/shutdown/relaunch/delete`, `vm.health/logs`, `vm.waitForAgent`). `Node` renamed to `VM` throughout the TS surface (the Go SDK uses "Node"; TS reads better as "VM"). TypeScript source, dual ESM+CJS build via tsup. Node 18+.
 
 ### SDK shape decision (2026-04-13)
-Evaluated E2B, Modal, Vercel TS SDKs:
-- **E2B**: nested instance — `sandbox.commands.run`, `sandbox.files.read`, `sandbox.pty.*`; static `Sandbox.create/connect/list`.
-- **Modal**: namespaced top-level — `modal.sandboxes.*`, `modal.apps.*`; `sb.exec()` returns a process with stream accessors.
-- **Vercel**: flat — `sandbox.runCommand`, `sandbox.readFile`, `sandbox.writeFiles`.
-
-Slicer has both control-plane (host groups, VMs, stats, secrets) and per-VM ops; flat Vercel shape doesn't distinguish these and scales poorly. Adopted Modal/E2B hybrid: namespaced top-level + handle-based per-VM surface. `Node` → `VM` rename chosen explicitly (Alex, 2026-04-13): Go SDK uses "Node" for historical reasons; TS consumers expect "VM".
+Considered a flat surface (every method hanging directly off `SlicerClient`) versus a grouped one (namespaces + per-VM handle). Flat doesn't scale here — Slicer has both control-plane concerns (host groups, VMs, stats, secrets) and per-VM concerns (exec, fs, power, snapshots), and putting them all at one level makes the API hard to navigate and easy to misuse. Adopted the grouped shape: namespaced top-level (`client.hostGroups`, `client.vms`, `client.secrets`) plus a handle-based per-VM surface (`VM` returned from `client.vms.create()`). `Node` → `VM` rename chosen explicitly (Alex, 2026-04-13): Go SDK uses "Node" for historical reasons; TS consumers expect "VM".
 
 Checkbox convention: **(impl)** = code written + typechecks clean; **(tested e2e)** = ran against the live local daemon and passed. Items that diverge from the Go SDK because of daemon reality are noted inline.
 

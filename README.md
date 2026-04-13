@@ -2,7 +2,7 @@
 
 TypeScript SDK for the [Slicer](https://slicervm.com) VM control-plane API.
 
-Mirrors the [Go SDK](https://github.com/slicervm/sdk) semantically, with a grouped TypeScript shape inspired by `@e2b` and `modal`. The top-level `SlicerClient` exposes `hostGroups`, `vms`, and `secrets` namespaces; per-VM operations live on a `VM` handle returned from `client.vms.create()` / `client.vms.attach()`.
+Mirrors the [Go SDK](https://github.com/slicervm/sdk) semantically. The top-level `SlicerClient` exposes `hostGroups`, `vms`, and `secrets` namespaces for control-plane operations; per-VM operations live on a `VM` handle returned from `client.vms.create()` / `client.vms.attach()`.
 
 Supports Unix socket and HTTP(S) transports.
 
