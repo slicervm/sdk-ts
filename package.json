@@ -1,6 +1,6 @@
 {
   "name": "@slicervm/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript SDK for the Slicer VM control-plane API.",
   "license": "MIT",
   "author": "Alex Ellis <alex@openfaas.com>",
