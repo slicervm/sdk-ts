@@ -45,8 +45,8 @@ export interface TransportClientOptions {
 
 export class TransportClient {
   readonly transport: Transport;
-  private readonly token?: string;
-  private readonly userAgent: string;
+  readonly token?: string;
+  readonly userAgent: string;
 
   constructor(opts: TransportClientOptions) {
     this.transport = resolveTransport(opts.baseURL);

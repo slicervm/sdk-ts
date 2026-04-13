@@ -5,6 +5,7 @@
 
 import { Readable } from 'node:stream';
 import type { TransportClient } from './transport.js';
+import { Forwarder, type ForwarderOptions } from './forward.js';
 import {
   type AgentHealth,
   type ExecFrame,
@@ -258,6 +259,32 @@ export class VM {
   /** Mac-only on current daemons. Throws `SlicerAPIError 404` on Linux. */
   async restore(): Promise<void> {
     await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/restore`);
+  }
+
+  // --- port forwarding ---------------------------------------------------
+
+  /**
+   * Open one or more port forwards from the host to this VM. Each spec follows
+   * the same syntax as `slicer vm forward -L`:
+   *
+   *   `127.0.0.1:9000`              — listen and forward on the same TCP port
+   *   `8081:127.0.0.1:8080`         — listen on `0.0.0.0:8081`, forward to `127.0.0.1:8080`
+   *   `0.0.0.0:8080:127.0.0.1:8080` — fully explicit
+   *   `9000:/var/run/docker.sock`   — TCP listen, Unix socket forward
+   *   `/tmp/docker.sock:/var/run/docker.sock` — Unix-to-Unix
+   *
+   * Returns a {@link Forwarder} handle. Call `forwarder.close()` to tear down
+   * all listeners and any in-flight tunnel sockets.
+   */
+  async forward(specs: string | string[], options?: ForwarderOptions): Promise<Forwarder> {
+    return Forwarder.start({
+      hostname: this.hostname,
+      transport: this.transport.transport,
+      ...(this.transport.token !== undefined && { token: this.transport.token }),
+      userAgent: this.transport.userAgent,
+      specs: typeof specs === 'string' ? [specs] : specs,
+      ...(options !== undefined && { options }),
+    });
   }
 
   // --- exec -------------------------------------------------------------

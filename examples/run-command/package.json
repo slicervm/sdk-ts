@@ -1,0 +1,16 @@
+{
+  "name": "slicervm-run-command-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx run-command.ts"
+  },
+  "dependencies": {
+    "@slicervm/sdk": "^0.1.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.5"
+  }
+}

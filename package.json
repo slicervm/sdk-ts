@@ -1,6 +1,6 @@
 {
   "name": "@slicervm/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript SDK for the Slicer VM control-plane API.",
   "license": "MIT",
   "author": "Alex Ellis <alex@openfaas.com>",
@@ -59,8 +59,12 @@
     "test:watch": "vitest",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "@types/ws": "^8.5.10",
     "tsup": "^8.0.2",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
