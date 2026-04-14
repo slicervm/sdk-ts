@@ -10,6 +10,7 @@ import {
   type AgentHealth,
   type ExecFrame,
   type ExecRequest,
+  type ExecStdio,
   type ExecResult,
   type ExecResultBinary,
   type FSEntry,
@@ -387,7 +388,8 @@ export class VM {
    */
   async *exec(req: ExecRequest): AsyncGenerator<ExecFrame, void, void> {
     const { path, body } = buildExecPath(this.hostname, req, false);
-    for await (const frame of this.transport.requestNDJSON<ExecFrame>('POST', path, body)) {
+    for await (const raw of this.transport.requestNDJSON<WireExecFrame>('POST', path, body)) {
+      const frame = normalizeExecFrame(raw);
       if (frame.encoding === 'base64') {
         if (frame.data) frame.dataBytes = Buffer.from(frame.data, 'base64');
         if (frame.stdout) frame.stdoutBytes = Buffer.from(frame.stdout, 'base64');
@@ -452,6 +454,43 @@ export class VM {
       ...common,
     } satisfies ExecResult;
   }
+}
+
+/**
+ * WireExecFrame mirrors the JSON shape the server emits on the NDJSON exec
+ * stream. Field names are snake_case to match the wire; `normalizeExecFrame`
+ * maps them to the camelCase `ExecFrame` public type.
+ */
+interface WireExecFrame {
+  timestamp?: string;
+  type?: string;
+  pid?: number;
+  encoding?: ExecStdio;
+  data?: string;
+  started_at?: string;
+  ended_at?: string;
+  signal?: string;
+  stdout?: string;
+  stderr?: string;
+  exit_code?: number;
+  error?: string;
+}
+
+function normalizeExecFrame(raw: WireExecFrame): ExecFrame {
+  const frame: ExecFrame = {};
+  if (raw.timestamp !== undefined) frame.timestamp = raw.timestamp;
+  if (raw.type !== undefined) frame.type = raw.type;
+  if (raw.pid !== undefined) frame.pid = raw.pid;
+  if (raw.encoding !== undefined) frame.encoding = raw.encoding;
+  if (raw.data !== undefined) frame.data = raw.data;
+  if (raw.started_at !== undefined) frame.startedAt = raw.started_at;
+  if (raw.ended_at !== undefined) frame.endedAt = raw.ended_at;
+  if (raw.signal !== undefined) frame.signal = raw.signal;
+  if (raw.stdout !== undefined) frame.stdout = raw.stdout;
+  if (raw.stderr !== undefined) frame.stderr = raw.stderr;
+  if (raw.exit_code !== undefined) frame.exitCode = raw.exit_code;
+  if (raw.error !== undefined) frame.error = raw.error;
+  return frame;
 }
 
 function buildExecPath(
