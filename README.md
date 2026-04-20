@@ -23,6 +23,13 @@ console.log(result.stdout);
 await vm.fs.writeFile('/tmp/hello.txt', 'hi');
 console.log((await vm.fs.readFile('/tmp/hello.txt')).toString());
 
+// Background exec — detached, survives disconnect, logs into an agent-side
+// ring buffer. Manage via vm.bg.list/info/logs/kill/wait/remove.
+const bg = await vm.bg.exec({ command: 'npm', args: ['run', 'dev'], cwd: '/app' });
+for await (const f of vm.bg.logs(bg.execId, { follow: true })) {
+  if (f.stdoutBytes) process.stdout.write(f.stdoutBytes);
+}
+
 await vm.delete();
 ```
 

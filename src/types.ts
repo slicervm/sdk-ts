@@ -140,6 +140,101 @@ export interface ExecResultBinary {
   error?: string;
 }
 
+// ----- background exec --------------------------------------------------
+
+/**
+ * Launch parameters for a background exec. Mirrors the Go SDK's
+ * `ExecBackgroundRequest`. The child is detached at launch and survives
+ * client disconnect; manage it via `vm.bg.list/info/logs/kill/wait/remove`.
+ *
+ * `command` + `args` is the always-correct deterministic form (matches the
+ * `--cmd` / `--arg` CLI flags). For `$VAR` expansion or shell operators set
+ * `shell` to a shell path (e.g. `/bin/bash`) and pass the script as
+ * `command`; the agent runs `<shell> -lc "<command>"` in that case.
+ */
+export interface BgExecRequest {
+  command: string;
+  args?: string[];
+  env?: string[];
+  uid?: number;
+  gid?: number;
+  cwd?: string;
+  /**
+   * Empty (default): direct exec. Set to a shell path (e.g. `/bin/bash`) for
+   * `$VAR` expansion, globs, and shell operators. With a shell, bash auto-
+   * `exec`s the last simple command in `-c` scripts so the daemon is the
+   * tracked PID for typical cases. Multi-statement scripts that need clean
+   * tree should write `exec` themselves.
+   */
+  shell?: string;
+  /** Per-process ring buffer cap in bytes. Zero means server default (1 MiB). */
+  ringBytes?: number;
+}
+
+/** Returned by `vm.bg.exec` on success. */
+export interface BgExecResponse {
+  execId: string;
+  pid: number;
+  startedAt: string;
+  ringBytes: number;
+}
+
+/** Status of one background exec — returned by `vm.bg.list` and `vm.bg.info`. */
+export interface BgExecInfo {
+  execId: string;
+  pid: number;
+  command: string;
+  args?: string[];
+  cwd?: string;
+  uid?: number;
+  startedAt: string;
+  running: boolean;
+  /** Present once the child has exited. */
+  exitCode?: number;
+  signal?: string;
+  endedAt?: string;
+  bytesWritten: number;
+  bytesDropped: number;
+  /** Next frame id the agent will emit on this exec's log ring. */
+  nextId: number;
+  ringBytes: number;
+}
+
+export interface BgKillOptions {
+  /** Signal name (e.g. `TERM`, `KILL`, `HUP`). Default: `TERM`. */
+  signal?: string;
+  /** Grace period before the agent escalates to `SIGKILL`. Server default 5000ms. */
+  graceMs?: number;
+}
+
+export interface BgKillResponse {
+  execId: string;
+  pid: number;
+  running: boolean;
+  signalSent: string;
+}
+
+export interface BgWaitExitResponse {
+  execId: string;
+  running: boolean;
+  exitCode?: number;
+  signal?: string;
+  endedAt?: string;
+  timedOut: boolean;
+}
+
+export interface BgDeleteResponse {
+  execId: string;
+  reaped: boolean;
+}
+
+export interface BgLogOptions {
+  /** Stream live frames after replaying ring contents. */
+  follow?: boolean;
+  /** Start cursor at frame N. Lower than the live cursor replays history; higher waits (when `follow`). */
+  fromId?: number;
+}
+
 export interface FSEntry {
   name: string;
   type: 'file' | 'directory' | 'symlink' | string;

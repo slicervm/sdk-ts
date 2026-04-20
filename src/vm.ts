@@ -8,6 +8,14 @@ import type { TransportClient } from './transport.js';
 import { Forwarder, type ForwarderOptions } from './forward.js';
 import {
   type AgentHealth,
+  type BgDeleteResponse,
+  type BgExecInfo,
+  type BgExecRequest,
+  type BgExecResponse,
+  type BgKillOptions,
+  type BgKillResponse,
+  type BgLogOptions,
+  type BgWaitExitResponse,
   type ExecFrame,
   type ExecRequest,
   type ExecStdio,
@@ -242,6 +250,7 @@ export class VM {
   readonly createdAt?: string;
   readonly arch?: string;
   readonly fs: VMFileSystem;
+  readonly bg: VMBg;
 
   private readonly transport: TransportClient;
 
@@ -253,6 +262,7 @@ export class VM {
     if (init.createdAt !== undefined) this.createdAt = init.createdAt;
     if (init.arch !== undefined) this.arch = init.arch;
     this.fs = new VMFileSystem(transport, this.hostname);
+    this.bg = new VMBg(transport, this.hostname);
   }
 
   // --- lifecycle --------------------------------------------------------
@@ -526,4 +536,237 @@ function sleep(ms: number): Promise<void> {
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+// ---------------------------------------------------------------------------
+// Background exec — `vm.bg.*`
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-VM background-exec operations. A bg exec is detached at launch (its own
+ * session leader), survives client disconnect, and writes stdout/stderr into a
+ * per-process ring buffer on the agent. Manage one with the `execId` returned
+ * from `exec()` plus `info`, `logs`, `kill`, `wait`, `remove`. The ring stays
+ * allocated after the child exits — call `remove()` to free its budget.
+ */
+export class VMBg {
+  constructor(
+    private readonly transport: TransportClient,
+    private readonly hostname: string,
+  ) {}
+
+  /**
+   * Launch a long-running process. `command` + `args` is the deterministic
+   * exec form (no shell). Set `shell: '/bin/bash'` (or similar) to opt in
+   * to shell semantics — `$VAR` expansion, globs, `&&`/`||`, etc.
+   */
+  async exec(req: BgExecRequest): Promise<BgExecResponse> {
+    if (!req.command) throw new Error('vm.bg.exec: command is required');
+    const q = new URLSearchParams();
+    q.set('background', 'true');
+    q.set('cmd', req.command);
+    for (const a of req.args ?? []) q.append('args', a);
+    for (const e of req.env ?? []) q.append('env', e);
+    if (req.uid !== undefined && req.uid !== 0) q.set('uid', String(req.uid));
+    if (req.gid !== undefined && req.gid !== 0) q.set('gid', String(req.gid));
+    if (req.shell) q.set('shell', req.shell);
+    if (req.cwd) q.set('cwd', req.cwd);
+    if (req.ringBytes !== undefined && req.ringBytes > 0) {
+      q.set('ring_bytes', String(req.ringBytes));
+    }
+    q.set('stdio', 'base64');
+    const path = `/vm/${encodeURIComponent(this.hostname)}/exec?${q.toString()}`;
+    const wire = await this.transport.request<WireBgExecResponse>('POST', path);
+    return bgExecResponseFromWire(wire);
+  }
+
+  /** All background execs the agent currently tracks (running + exited-not-reaped). */
+  async list(): Promise<BgExecInfo[]> {
+    const wire = await this.transport.request<WireBgExecInfo[]>(
+      'GET',
+      `/vm/${encodeURIComponent(this.hostname)}/exec`,
+    );
+    return (wire ?? []).map(bgExecInfoFromWire);
+  }
+
+  /** Latest status snapshot for one bg exec. Throws 404 if reaped or never existed. */
+  async info(execId: string): Promise<BgExecInfo> {
+    const wire = await this.transport.request<WireBgExecInfo>(
+      'GET',
+      `/vm/${encodeURIComponent(this.hostname)}/exec/${encodeURIComponent(execId)}`,
+    );
+    return bgExecInfoFromWire(wire);
+  }
+
+  /**
+   * NDJSON log stream. Yields one frame per log line — `started`, `stdout`,
+   * `stderr`, `exit`, plus optional `gap` frames if the ring evicted history
+   * before the requested cursor. Frames carry `data` base64-encoded; the SDK
+   * also populates `dataBytes` / `stdoutBytes` / `stderrBytes` Buffers.
+   *
+   * `follow: false` (default) replays from the cursor and ends when the ring
+   * is drained. `follow: true` keeps the stream open until the child exits or
+   * the caller breaks out.
+   */
+  async *logs(execId: string, opts: BgLogOptions = {}): AsyncGenerator<ExecFrame, void, void> {
+    const q = new URLSearchParams();
+    if (opts.follow) q.set('follow', 'true');
+    if (opts.fromId !== undefined && opts.fromId > 0) q.set('from_id', String(opts.fromId));
+    const path =
+      `/vm/${encodeURIComponent(this.hostname)}/exec/${encodeURIComponent(execId)}/logs` +
+      (q.toString() ? `?${q.toString()}` : '');
+    for await (const raw of this.transport.requestNDJSON<WireExecFrame>('GET', path)) {
+      const frame = normalizeExecFrame(raw);
+      if (frame.encoding === 'base64') {
+        if (frame.data) frame.dataBytes = Buffer.from(frame.data, 'base64');
+        if (frame.stdout) frame.stdoutBytes = Buffer.from(frame.stdout, 'base64');
+        if (frame.stderr) frame.stderrBytes = Buffer.from(frame.stderr, 'base64');
+      }
+      yield frame;
+    }
+  }
+
+  /**
+   * Signal a running bg exec. Default: SIGTERM with a 5 s grace period before
+   * the agent escalates to SIGKILL. No-op (running=false) if the child has
+   * already exited.
+   */
+  async kill(execId: string, opts: BgKillOptions = {}): Promise<BgKillResponse> {
+    const body: Record<string, unknown> = {};
+    if (opts.signal) body.signal = opts.signal;
+    if (opts.graceMs !== undefined) body.grace_ms = opts.graceMs;
+    const wire = await this.transport.request<WireBgKillResponse>(
+      'POST',
+      `/vm/${encodeURIComponent(this.hostname)}/exec/${encodeURIComponent(execId)}/kill`,
+      body,
+    );
+    return bgKillResponseFromWire(wire);
+  }
+
+  /**
+   * Long-poll until the child exits or `timeoutSec` elapses. Returns
+   * `timedOut: true` if the deadline hit. Server default for `timeoutSec=0`
+   * is 30 s.
+   */
+  async wait(execId: string, timeoutSec = 0): Promise<BgWaitExitResponse> {
+    const q = new URLSearchParams();
+    if (timeoutSec > 0) q.set('timeout', String(timeoutSec));
+    const path =
+      `/vm/${encodeURIComponent(this.hostname)}/exec/${encodeURIComponent(execId)}/wait-exit` +
+      (q.toString() ? `?${q.toString()}` : '');
+    const wire = await this.transport.request<WireBgWaitExitResponse>('GET', path);
+    return bgWaitExitFromWire(wire);
+  }
+
+  /**
+   * Reap a bg exec's ring buffer + registry entry. Does NOT kill a running
+   * process — pair with `kill()` for "stop and clean up". After remove,
+   * info/logs/kill/wait return 410 Gone.
+   */
+  async remove(execId: string): Promise<BgDeleteResponse> {
+    const wire = await this.transport.request<WireBgDeleteResponse>(
+      'DELETE',
+      `/vm/${encodeURIComponent(this.hostname)}/exec/${encodeURIComponent(execId)}`,
+    );
+    return bgDeleteFromWire(wire);
+  }
+}
+
+// ----- bg wire mapping -----------------------------------------------------
+
+interface WireBgExecResponse {
+  exec_id: string;
+  pid: number;
+  started_at: string;
+  ring_bytes: number;
+}
+interface WireBgExecInfo {
+  exec_id: string;
+  pid: number;
+  command: string;
+  args?: string[];
+  cwd?: string;
+  uid?: number;
+  started_at: string;
+  running: boolean;
+  exit_code?: number;
+  signal?: string;
+  ended_at?: string;
+  bytes_written: number;
+  bytes_dropped: number;
+  next_id: number;
+  ring_bytes: number;
+}
+interface WireBgKillResponse {
+  exec_id: string;
+  pid: number;
+  running: boolean;
+  signal_sent: string;
+}
+interface WireBgWaitExitResponse {
+  exec_id: string;
+  running: boolean;
+  exit_code?: number;
+  signal?: string;
+  ended_at?: string;
+  timed_out: boolean;
+}
+interface WireBgDeleteResponse {
+  exec_id: string;
+  reaped: boolean;
+}
+
+function bgExecResponseFromWire(w: WireBgExecResponse): BgExecResponse {
+  return {
+    execId: w.exec_id,
+    pid: w.pid,
+    startedAt: w.started_at,
+    ringBytes: w.ring_bytes,
+  };
+}
+
+function bgExecInfoFromWire(w: WireBgExecInfo): BgExecInfo {
+  const out: BgExecInfo = {
+    execId: w.exec_id,
+    pid: w.pid,
+    command: w.command,
+    startedAt: w.started_at,
+    running: w.running,
+    bytesWritten: w.bytes_written,
+    bytesDropped: w.bytes_dropped,
+    nextId: w.next_id,
+    ringBytes: w.ring_bytes,
+  };
+  if (w.args !== undefined) out.args = w.args;
+  if (w.cwd !== undefined) out.cwd = w.cwd;
+  if (w.uid !== undefined) out.uid = w.uid;
+  if (w.exit_code !== undefined) out.exitCode = w.exit_code;
+  if (w.signal !== undefined) out.signal = w.signal;
+  if (w.ended_at !== undefined) out.endedAt = w.ended_at;
+  return out;
+}
+
+function bgKillResponseFromWire(w: WireBgKillResponse): BgKillResponse {
+  return {
+    execId: w.exec_id,
+    pid: w.pid,
+    running: w.running,
+    signalSent: w.signal_sent,
+  };
+}
+
+function bgWaitExitFromWire(w: WireBgWaitExitResponse): BgWaitExitResponse {
+  const out: BgWaitExitResponse = {
+    execId: w.exec_id,
+    running: w.running,
+    timedOut: w.timed_out,
+  };
+  if (w.exit_code !== undefined) out.exitCode = w.exit_code;
+  if (w.signal !== undefined) out.signal = w.signal;
+  if (w.ended_at !== undefined) out.endedAt = w.ended_at;
+  return out;
+}
+
+function bgDeleteFromWire(w: WireBgDeleteResponse): BgDeleteResponse {
+  return { execId: w.exec_id, reaped: w.reaped };
 }
