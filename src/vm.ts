@@ -567,8 +567,12 @@ export class VMBg {
     q.set('cmd', req.command);
     for (const a of req.args ?? []) q.append('args', a);
     for (const e of req.env ?? []) q.append('env', e);
-    if (req.uid !== undefined && req.uid !== 0) q.set('uid', String(req.uid));
-    if (req.gid !== undefined && req.gid !== 0) q.set('gid', String(req.gid));
+    // Serialize uid/gid whenever the caller provided them — including 0.
+    // Omitting 0 would collide with the agent's "auto-detect non-root" path
+    // (see resolveUIDGID in slicer-agent), silently demoting requests for
+    // root to ubuntu. Leave the field off only when the caller didn't set it.
+    if (req.uid !== undefined) q.set('uid', String(req.uid));
+    if (req.gid !== undefined) q.set('gid', String(req.gid));
     if (req.shell) q.set('shell', req.shell);
     if (req.cwd) q.set('cwd', req.cwd);
     if (req.ringBytes !== undefined && req.ringBytes > 0) {

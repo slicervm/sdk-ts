@@ -10,3 +10,15 @@ export {
   type ForwarderListener,
   type ForwarderOptions,
 } from './forward.js';
+export {
+  SlicerShellSession,
+  encodeFrame,
+  parseFrame,
+  FRAME_TYPE_DATA,
+  FRAME_TYPE_WINDOW_SIZE,
+  FRAME_TYPE_SHUTDOWN,
+  FRAME_TYPE_HEARTBEAT,
+  FRAME_TYPE_SESSION_CLOSE,
+  type ShellSessionOptions,
+  type XTermLike,
+} from './shell.js';
