@@ -15,6 +15,7 @@
 
 import { TransportClient, type TransportClientOptions } from './transport.js';
 import { HostGroupsAPI, SecretsAPI, VMsAPI } from './namespaces.js';
+import { ProxyAPI } from './proxy.js';
 import type { SlicerInfo } from './types.js';
 
 export interface SlicerClientOptions extends TransportClientOptions {}
@@ -24,12 +25,14 @@ export class SlicerClient {
   readonly hostGroups: HostGroupsAPI;
   readonly vms: VMsAPI;
   readonly secrets: SecretsAPI;
+  readonly proxy: ProxyAPI;
 
   constructor(opts: SlicerClientOptions) {
     this.transport = new TransportClient(opts);
     this.hostGroups = new HostGroupsAPI(this.transport);
     this.vms = new VMsAPI(this.transport);
     this.secrets = new SecretsAPI(this.transport);
+    this.proxy = new ProxyAPI(this.transport);
   }
 
   static fromEnv(overrides: Partial<SlicerClientOptions> = {}): SlicerClient {

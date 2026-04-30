@@ -26,6 +26,16 @@ export interface VMInfo {
   persistent?: boolean;
 }
 
+/**
+ * Per-launch network policy override for isolated host groups.
+ * Omitted lists inherit the host group's policy. Empty lists intentionally
+ * clear that list for this VM launch.
+ */
+export interface CreateVMNetworkPolicy {
+  allow?: string[];
+  drop?: string[];
+}
+
 export interface CreateVMRequest {
   ramBytes?: number;
   cpus?: number;
@@ -38,6 +48,7 @@ export interface CreateVMRequest {
   ip?: string;
   tags?: string[];
   secrets?: string[];
+  network?: CreateVMNetworkPolicy;
 }
 
 export interface CreateVMResponse {

@@ -49,6 +49,12 @@ export interface WireCreateVMRequest {
   ip?: string;
   tags?: string[];
   secrets?: string[];
+  network?: WireCreateVMNetworkPolicy;
+}
+
+export interface WireCreateVMNetworkPolicy {
+  allow?: string[];
+  drop?: string[];
 }
 
 export interface WireCreateVMResponse {
@@ -131,6 +137,7 @@ export function createVMReqToWire(r: CreateVMRequest): WireCreateVMRequest {
   if (r.ip !== undefined) o.ip = r.ip;
   if (r.tags !== undefined) o.tags = r.tags;
   if (r.secrets !== undefined) o.secrets = r.secrets;
+  if (r.network !== undefined) o.network = r.network;
   return o;
 }
 

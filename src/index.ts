@@ -1,6 +1,23 @@
 export * from './types.js';
 export { SlicerClient, type SlicerClientOptions } from './client.js';
 export { HostGroupsAPI, VMsAPI, SecretsAPI } from './namespaces.js';
+export {
+  ProxyAPI,
+  ProxyClientsAPI,
+  ProxySecretsAPI,
+  ProxyAllowsAPI,
+  ProxySecretBearer,
+  ProxySecretBasic,
+  type ProxyClient,
+  type ProxyClientCreated,
+  type CreateProxyClientOptions,
+  type ProxySecret,
+  type ProxySecretType,
+  type CreateProxySecretRequest,
+  type ProxyAllowRule,
+  type AddProxyAllowRequest,
+  type RemoveProxyAllowByTupleRequest,
+} from './proxy.js';
 export { VM, VMBg, VMFileSystem, type VMInit } from './vm.js';
 export { resolveTransport } from './transport.js';
 export {
