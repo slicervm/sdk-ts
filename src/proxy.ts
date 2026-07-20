@@ -24,10 +24,12 @@
 import type { TransportClient } from './transport.js';
 
 /** Credential type for upstream injection. */
-export type ProxySecretType = 'bearer' | 'basic';
+export type ProxySecretType = 'bearer' | 'basic' | 'oauth-client-creds';
 export const ProxySecretBearer: ProxySecretType = 'bearer';
 /** For basic auth, the secret value must be in `user:pass` form. */
 export const ProxySecretBasic: ProxySecretType = 'basic';
+/** OAuth 2.0 client credentials exchanged and renewed by the proxy host. */
+export const ProxySecretOAuthClientCredentials: ProxySecretType = 'oauth-client-creds';
 
 /** A registered proxy client. Tokens are never returned by list/get. */
 export interface ProxyClient {
@@ -72,7 +74,9 @@ export interface CreateProxySecretRequest {
   /**
    * Plaintext credential. For `bearer`, the raw token. For `basic`,
    * must be in `user:pass` form (the proxy base64-encodes it on the
-   * inner request).
+   * inner request). For `oauth-client-creds`, pass top-level JSON containing
+   * `token_endpoint`, `client_id`, and `client_secret`; optional `scope` is
+   * supported. The proxy obtains, caches, and renews the bearer host-side.
    */
   value: string;
 }

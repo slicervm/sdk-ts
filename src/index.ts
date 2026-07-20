@@ -8,6 +8,7 @@ export {
   ProxyAllowsAPI,
   ProxySecretBearer,
   ProxySecretBasic,
+  ProxySecretOAuthClientCredentials,
   type ProxyClient,
   type ProxyClientCreated,
   type CreateProxyClientOptions,
