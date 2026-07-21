@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createVMReqToWire } from '../src/wire.js';
+import { agentHealthFromWire, createVMReqToWire } from '../src/wire.js';
 
 describe('createVMReqToWire', () => {
   it('passes isolated network launch overrides through to wire JSON', () => {
@@ -31,6 +31,20 @@ describe('createVMReqToWire', () => {
       network: {
         allow: [],
       },
+    });
+  });
+});
+
+describe('agentHealthFromWire', () => {
+  it('maps the userdata exit code', () => {
+    expect(
+      agentHealthFromWire({
+        userdata_ran: true,
+        userdata_exit_code: 17,
+      }),
+    ).toEqual({
+      userdataRan: true,
+      userdataExitCode: 17,
     });
   });
 });

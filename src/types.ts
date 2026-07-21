@@ -65,6 +65,7 @@ export interface AgentHealth {
   agentVersion?: string;
   systemUptime?: number;
   userdataRan?: boolean;
+  userdataExitCode?: number;
 }
 
 export interface VMLogs {
