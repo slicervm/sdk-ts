@@ -71,6 +71,7 @@ export interface WireAgentHealth {
   agent_version?: string;
   system_uptime?: number;
   userdata_ran?: boolean;
+  userdata_exit_code?: number;
 }
 
 export interface WireFSInfo {
@@ -158,6 +159,7 @@ export function agentHealthFromWire(w: WireAgentHealth): AgentHealth {
     ...(w.agent_version !== undefined && { agentVersion: w.agent_version }),
     ...(w.system_uptime !== undefined && { systemUptime: w.system_uptime }),
     ...(w.userdata_ran !== undefined && { userdataRan: w.userdata_ran }),
+    ...(w.userdata_exit_code !== undefined && { userdataExitCode: w.userdata_exit_code }),
   };
 }
 

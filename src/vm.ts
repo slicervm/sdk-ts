@@ -317,9 +317,14 @@ export class VM {
     while (Date.now() < deadline) {
       try {
         last = await this.health();
-        if (last.userdataRan) return last;
       } catch (err) {
         lastErr = err;
+      }
+      if (last?.userdataRan) {
+        if (last.userdataExitCode !== undefined && last.userdataExitCode !== 0) {
+          throw new Error(`userdata failed with exit code ${last.userdataExitCode}`);
+        }
+        return last;
       }
       await sleep(intervalMs);
     }
