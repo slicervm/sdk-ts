@@ -355,12 +355,13 @@ export interface VMForkOptions {
   /** Agent-readiness timeout in seconds. Forks always wait for the child agent. */
   waitTimeoutSec?: number;
   network?: VMForkNetworkPolicy;
+  tags?: string[];
 }
 
 export interface VMForkResponse {
   hostname: string;
+  sourceHostname: string;
   commitId?: string;
-  childHostname: string;
   status: string;
   parentStatus?: string;
   childStatus?: string;

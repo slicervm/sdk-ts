@@ -182,7 +182,6 @@ export class CommitsAPI {
 
   async fork(
     commitId: string,
-    childHostname?: string,
     opts: VMForkOptions = {},
   ): Promise<VMForkResponse> {
     const id = validateCommitId(commitId);
@@ -190,12 +189,11 @@ export class CommitsAPI {
     if (opts.waitTimeoutSec !== undefined && opts.waitTimeoutSec > 0) {
       qs.set('timeout', `${opts.waitTimeoutSec}s`);
     }
-    const hostname = childHostname?.trim();
     const body =
-      hostname || opts.network !== undefined
+      opts.network !== undefined || (opts.tags?.length ?? 0) > 0
         ? {
-            ...(hostname && { hostname }),
             ...(opts.network !== undefined && { network: opts.network }),
+            ...((opts.tags?.length ?? 0) > 0 && { tags: opts.tags }),
           }
         : undefined;
     const wire = await this.transport.request<WireVMForkResponse>(
