@@ -46,9 +46,10 @@ const parent = await vm.commit({
   cacheKey: 'node-build-v1',
 });
 
-const child = await parent.fork(undefined, {
+const child = await parent.fork({
   waitTimeoutSec: 120,
   network: { allow: [], drop: ['0.0.0.0/0'] },
+  tags: ['job=node-build'],
 });
 
 const description = await child.describe();

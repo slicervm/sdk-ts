@@ -85,7 +85,7 @@ async function main() {
     const forked = await Promise.all(
       Array.from({ length: JOBS }, async (_, i) => {
         const child = await timed(`fork ${i + 1}`, () =>
-          committed!.fork(`${HOST_GROUP}-${i + 2}`, { waitTimeoutSec: 180 }),
+          committed!.fork({ waitTimeoutSec: 180, tags: [RUN_TAG, `job=${i + 1}`] }),
         );
         return child;
       }),

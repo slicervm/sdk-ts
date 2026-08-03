@@ -108,8 +108,8 @@ export interface WireVMCommitDeleteResponse {
 
 export interface WireVMForkResponse {
   hostname: string;
+  source_hostname: string;
   commit_id?: string;
-  child_hostname: string;
   status: string;
   parent_status?: string;
   child_status?: string;
@@ -252,8 +252,8 @@ export function vmCommitDeleteFromWire(w: WireVMCommitDeleteResponse): VMCommitD
 export function vmForkFromWire(w: WireVMForkResponse): VMForkResponse {
   return {
     hostname: w.hostname,
+    sourceHostname: w.source_hostname,
     ...(w.commit_id !== undefined && { commitId: w.commit_id }),
-    childHostname: w.child_hostname,
     status: w.status,
     ...(w.parent_status !== undefined && { parentStatus: w.parent_status }),
     ...(w.child_status !== undefined && { childStatus: w.child_status }),

@@ -281,24 +281,22 @@ export class CommittedVM {
     if (response.cacheKey !== undefined) this.cacheKey = response.cacheKey;
   }
 
-  async fork(childHostname?: string, opts: VMForkOptions = {}): Promise<VM> {
+  async fork(opts: VMForkOptions = {}): Promise<VM> {
     const res = await forkPath(
       this.transport,
       this.commitId,
-      childHostname,
       opts,
     );
     return new VM(this.transport, {
-      hostname: res.childHostname,
+      hostname: res.hostname,
       hostGroup: this.hostGroup,
     });
   }
 
-  async forkRaw(childHostname?: string, opts: VMForkOptions = {}): Promise<VMForkResponse> {
+  async forkRaw(opts: VMForkOptions = {}): Promise<VMForkResponse> {
     return forkPath(
       this.transport,
       this.commitId,
-      childHostname,
       opts,
     );
   }
@@ -640,7 +638,6 @@ function errMsg(e: unknown): string {
 async function forkPath(
   transport: TransportClient,
   commitId: string,
-  childHostname: string | undefined,
   opts: VMForkOptions,
 ): Promise<VMForkResponse> {
   const id = validateCommitId(commitId);
@@ -650,12 +647,11 @@ async function forkPath(
     q.set('timeout', `${opts.waitTimeoutSec}s`);
   }
   const query = q.toString() ? `?${q.toString()}` : '';
-  const hostname = childHostname?.trim();
   const body =
-    hostname || opts.network !== undefined
+    opts.network !== undefined || (opts.tags?.length ?? 0) > 0
       ? {
-          ...(hostname && { hostname }),
           ...(opts.network !== undefined && { network: opts.network }),
+          ...((opts.tags?.length ?? 0) > 0 && { tags: opts.tags }),
         }
       : undefined;
   const wire = await transport.request<WireVMForkResponse>(

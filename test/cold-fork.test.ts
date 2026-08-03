@@ -52,12 +52,12 @@ describe('cold fork workflow', () => {
           req.method === 'POST' &&
           req.url === '/vm/commits/cmt-demo/fork?wait=agent&timeout=45s'
         ) {
-          expect(body).toEqual({ hostname: 'demo-2', network: { allow: [] } });
+          expect(body).toEqual({ network: { allow: [] }, tags: ['job=review'] });
           res.end(
             JSON.stringify({
-              hostname: 'demo-1',
+              hostname: 'demo-2',
+              source_hostname: 'demo-1',
               commit_id: 'cmt-demo',
-              child_hostname: 'demo-2',
               status: 'forked',
               child_status: 'running',
               mode: 'disk',
@@ -97,9 +97,10 @@ describe('cold fork workflow', () => {
     expect(committed.commitId).toBe('cmt-demo');
     expect((await client.commits.list({ tags: ['base', 'test'], cacheKey: 'cache-v1' }))[0])
       .toMatchObject({ commitId: 'cmt-demo', sourceHostGroup: 'demo' });
-    const child = await committed.fork('demo-2', {
+    const child = await committed.fork({
       waitTimeoutSec: 45,
       network: { allow: [] },
+      tags: ['job=review'],
     });
     expect(child.hostname).toBe('demo-2');
     const description = await child.describe();
