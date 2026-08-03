@@ -1,5 +1,5 @@
 /**
- * Top-level namespaces on SlicerClient: hostGroups, vms, secrets.
+ * Top-level namespaces on SlicerClient: hostGroups, vms, commits, secrets.
  * Keep control-plane operations here; per-VM operations live on the VM handle.
  */
 
@@ -16,6 +16,11 @@ import {
   SlicerAPIError,
   type UpdateSecretRequest,
   type VMInfo,
+  type VMCommitDeleteResponse,
+  type VMCommitInfo,
+  type VMCommitListOptions,
+  type VMForkOptions,
+  type VMForkResponse,
   type VMStat,
 } from './types.js';
 import {
@@ -23,11 +28,17 @@ import {
   createVMResFromWire,
   hostGroupFromWire,
   secretFromWire,
+  vmCommitDeleteFromWire,
+  vmCommitInfoFromWire,
+  vmForkFromWire,
   vmFromWire,
   vmStatFromWire,
   type WireCreateVMResponse,
   type WireHostGroup,
   type WireSecret,
+  type WireVMCommitDeleteResponse,
+  type WireVMCommitInfo,
+  type WireVMForkResponse,
   type WireVM,
   type WireVMStat,
 } from './wire.js';
@@ -139,6 +150,63 @@ export class VMsAPI {
   }
 }
 
+export class CommitsAPI {
+  constructor(private readonly transport: TransportClient) {}
+
+  async list(opts: VMCommitListOptions = {}): Promise<VMCommitInfo[]> {
+    const qs = new URLSearchParams();
+    for (const tag of opts.tags ?? []) {
+      const value = tag.trim();
+      if (value) qs.append('tag', value);
+    }
+    const cacheKey = opts.cacheKey?.trim();
+    const source = opts.source?.trim();
+    const mode = opts.mode?.trim();
+    if (cacheKey) qs.set('cache_key', cacheKey);
+    if (source) qs.set('source', source);
+    if (mode) qs.set('mode', mode);
+    const encoded = qs.toString();
+    const query = encoded ? `?${encoded}` : '';
+    const wire = await this.transport.request<WireVMCommitInfo[]>('GET', `/vm/commits${query}`);
+    return (wire ?? []).map(vmCommitInfoFromWire);
+  }
+
+  async delete(commitId: string): Promise<VMCommitDeleteResponse> {
+    const id = validateCommitId(commitId);
+    const wire = await this.transport.request<WireVMCommitDeleteResponse>(
+      'DELETE',
+      `/vm/commits/${encodeURIComponent(id)}`,
+    );
+    return vmCommitDeleteFromWire(wire);
+  }
+
+  async fork(
+    commitId: string,
+    childHostname?: string,
+    opts: VMForkOptions = {},
+  ): Promise<VMForkResponse> {
+    const id = validateCommitId(commitId);
+    const qs = new URLSearchParams({ wait: 'agent' });
+    if (opts.waitTimeoutSec !== undefined && opts.waitTimeoutSec > 0) {
+      qs.set('timeout', `${opts.waitTimeoutSec}s`);
+    }
+    const hostname = childHostname?.trim();
+    const body =
+      hostname || opts.network !== undefined
+        ? {
+            ...(hostname && { hostname }),
+            ...(opts.network !== undefined && { network: opts.network }),
+          }
+        : undefined;
+    const wire = await this.transport.request<WireVMForkResponse>(
+      'POST',
+      `/vm/commits/${encodeURIComponent(id)}/fork?${qs.toString()}`,
+      body,
+    );
+    return vmForkFromWire(wire);
+  }
+}
+
 export class SecretsAPI {
   constructor(private readonly transport: TransportClient) {}
 
@@ -186,4 +254,20 @@ function buildListQuery(opts: ListOptions): string {
   if (opts.tagPrefix) qs.set('tag_prefix', opts.tagPrefix);
   const s = qs.toString();
   return s ? `?${s}` : '';
+}
+
+function validateCommitId(commitId: string): string {
+  const value = commitId.trim();
+  if (
+    !value ||
+    value === '.' ||
+    value === '..' ||
+    value.includes('..') ||
+    value.includes('/') ||
+    value.includes('\\') ||
+    value.includes('\0')
+  ) {
+    throw new Error(`invalid commit ID ${JSON.stringify(value)}`);
+  }
+  return value;
 }

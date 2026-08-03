@@ -4,17 +4,18 @@
  * Shape:
  *   client.hostGroups.list() / find(name) / listVMs(name)
  *   client.vms.create(group, req, opts) → VM / get(name) / list() / stats() / attach(group, name)
+ *   client.commits.list() / fork(id) / delete(id)
  *   client.secrets.list / create / patch / delete
  *   client.getInfo()
  *
  * Per-VM operations live on the `VM` handle returned from `client.vms.create`
  * or `client.vms.attach`: `vm.exec`, `vm.execBuffered`, `vm.fs.*`,
- * `vm.pause/resume/suspend/restore/shutdown/relaunch`, `vm.health/logs`,
+ * `vm.pause/resume/suspend/restore/shutdown/relaunch`, `vm.commit/describe`, `vm.health/logs`,
  * `vm.waitForAgent/waitForUserdata`, `vm.delete`.
  */
 
 import { TransportClient, type TransportClientOptions } from './transport.js';
-import { HostGroupsAPI, SecretsAPI, VMsAPI } from './namespaces.js';
+import { CommitsAPI, HostGroupsAPI, SecretsAPI, VMsAPI } from './namespaces.js';
 import { ProxyAPI } from './proxy.js';
 import type { SlicerInfo } from './types.js';
 
@@ -24,6 +25,7 @@ export class SlicerClient {
   readonly transport: TransportClient;
   readonly hostGroups: HostGroupsAPI;
   readonly vms: VMsAPI;
+  readonly commits: CommitsAPI;
   readonly secrets: SecretsAPI;
   readonly proxy: ProxyAPI;
 
@@ -31,6 +33,7 @@ export class SlicerClient {
     this.transport = new TransportClient(opts);
     this.hostGroups = new HostGroupsAPI(this.transport);
     this.vms = new VMsAPI(this.transport);
+    this.commits = new CommitsAPI(this.transport);
     this.secrets = new SecretsAPI(this.transport);
     this.proxy = new ProxyAPI(this.transport);
   }

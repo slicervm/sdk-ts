@@ -27,14 +27,25 @@ import {
   type FSWatchRequest,
   type ShutdownRequest,
   SlicerAPIError,
+  type VMCommitOptions,
+  type VMCommitResponse,
+  type VMDescription,
+  type VMForkOptions,
+  type VMForkResponse,
   type VMLogs,
   type WaitOptions,
 } from './types.js';
 import {
   agentHealthFromWire,
   fsEntryFromWire,
+  vmCommitFromWire,
+  vmDescriptionFromWire,
+  vmForkFromWire,
   type WireAgentHealth,
   type WireFSInfo,
+  type WireVMCommitResponse,
+  type WireVMDescription,
+  type WireVMForkResponse,
 } from './wire.js';
 
 /** Per-VM filesystem operations. */
@@ -243,6 +254,56 @@ export interface VMInit {
   arch?: string;
 }
 
+export class CommittedVM {
+  readonly hostname: string;
+  readonly hostGroup: string;
+  readonly commitId: string;
+  readonly status: string;
+  readonly parentStatus?: string;
+  readonly mode: VMCommitResponse['mode'];
+  readonly tags?: string[];
+  readonly labels?: Record<string, string>;
+  readonly cacheKey?: string;
+
+  constructor(
+    private readonly transport: TransportClient,
+    hostGroup: string,
+    response: VMCommitResponse,
+  ) {
+    this.hostname = response.hostname;
+    this.hostGroup = hostGroup;
+    this.commitId = response.commitId;
+    this.status = response.status;
+    if (response.parentStatus !== undefined) this.parentStatus = response.parentStatus;
+    this.mode = response.mode;
+    if (response.tags !== undefined) this.tags = response.tags;
+    if (response.labels !== undefined) this.labels = response.labels;
+    if (response.cacheKey !== undefined) this.cacheKey = response.cacheKey;
+  }
+
+  async fork(childHostname?: string, opts: VMForkOptions = {}): Promise<VM> {
+    const res = await forkPath(
+      this.transport,
+      this.commitId,
+      childHostname,
+      opts,
+    );
+    return new VM(this.transport, {
+      hostname: res.childHostname,
+      hostGroup: this.hostGroup,
+    });
+  }
+
+  async forkRaw(childHostname?: string, opts: VMForkOptions = {}): Promise<VMForkResponse> {
+    return forkPath(
+      this.transport,
+      this.commitId,
+      childHostname,
+      opts,
+    );
+  }
+}
+
 export class VM {
   readonly hostname: string;
   readonly hostGroup: string;
@@ -288,6 +349,15 @@ export class VM {
 
   async logs(): Promise<VMLogs> {
     return this.transport.request<VMLogs>('GET', `/vm/${encodeURIComponent(this.hostname)}/logs`);
+  }
+
+  /** Return configuration, fork lineage, and effective network policy. */
+  async describe(): Promise<VMDescription> {
+    const wire = await this.transport.request<WireVMDescription>(
+      'GET',
+      `/vm/${encodeURIComponent(this.hostname)}`,
+    );
+    return vmDescriptionFromWire(wire);
   }
 
   async waitForAgent(opts: WaitOptions = {}): Promise<AgentHealth> {
@@ -365,6 +435,30 @@ export class VM {
   /** Mac-only on current daemons. Throws `SlicerAPIError 404` on Linux. */
   async restore(): Promise<void> {
     await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/restore`);
+  }
+
+  /**
+   * Commit a stopped persistent VM disk into an immutable parent.
+   */
+  async commit(opts: VMCommitOptions = {}): Promise<CommittedVM> {
+    const cacheKey = opts.cacheKey?.trim();
+    const tags = opts.tags && opts.tags.length > 0 ? opts.tags : undefined;
+    const labels =
+      opts.labels && Object.keys(opts.labels).length > 0 ? opts.labels : undefined;
+    const body =
+      tags !== undefined || labels !== undefined || cacheKey
+        ? {
+            ...(tags !== undefined && { tags }),
+            ...(labels !== undefined && { labels }),
+            ...(cacheKey && { cache_key: cacheKey }),
+          }
+        : undefined;
+    const wire = await this.transport.request<WireVMCommitResponse>(
+      'POST',
+      `/vm/${encodeURIComponent(this.hostname)}/commit`,
+      body,
+    );
+    return new CommittedVM(this.transport, this.hostGroup, vmCommitFromWire(wire));
   }
 
   // --- port forwarding ---------------------------------------------------
@@ -541,6 +635,51 @@ function sleep(ms: number): Promise<void> {
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+async function forkPath(
+  transport: TransportClient,
+  commitId: string,
+  childHostname: string | undefined,
+  opts: VMForkOptions,
+): Promise<VMForkResponse> {
+  const id = validateCommitId(commitId);
+  const q = new URLSearchParams();
+  q.set('wait', 'agent');
+  if (opts.waitTimeoutSec !== undefined && opts.waitTimeoutSec > 0) {
+    q.set('timeout', `${opts.waitTimeoutSec}s`);
+  }
+  const query = q.toString() ? `?${q.toString()}` : '';
+  const hostname = childHostname?.trim();
+  const body =
+    hostname || opts.network !== undefined
+      ? {
+          ...(hostname && { hostname }),
+          ...(opts.network !== undefined && { network: opts.network }),
+        }
+      : undefined;
+  const wire = await transport.request<WireVMForkResponse>(
+    'POST',
+    `/vm/commits/${encodeURIComponent(id)}/fork${query}`,
+    body,
+  );
+  return vmForkFromWire(wire);
+}
+
+function validateCommitId(commitId: string): string {
+  const value = commitId.trim();
+  if (
+    !value ||
+    value === '.' ||
+    value === '..' ||
+    value.includes('..') ||
+    value.includes('/') ||
+    value.includes('\\') ||
+    value.includes('\0')
+  ) {
+    throw new Error(`invalid commit ID ${JSON.stringify(value)}`);
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------

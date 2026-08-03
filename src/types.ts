@@ -304,6 +304,101 @@ export interface ShutdownRequest {
   action?: 'shutdown' | 'reboot';
 }
 
+export interface VMCommitOptions {
+  tags?: string[];
+  labels?: Record<string, string>;
+  cacheKey?: string;
+}
+
+export interface VMCommitResponse {
+  hostname: string;
+  commitId: string;
+  status: string;
+  parentStatus?: string;
+  mode: string;
+  tags?: string[];
+  labels?: Record<string, string>;
+  cacheKey?: string;
+}
+
+export interface VMCommitListOptions {
+  tags?: string[];
+  cacheKey?: string;
+  source?: string;
+  mode?: string;
+}
+
+export interface VMCommitInfo {
+  commitId: string;
+  sourceHostname: string;
+  sourceHostGroup: string;
+  createdAt: string;
+  mode: string;
+  tags?: string[];
+  labels?: Record<string, string>;
+  cacheKey?: string;
+}
+
+export interface VMCommitDeleteResponse {
+  commitId: string;
+  status: string;
+}
+
+/** Isolated-network policy override for a forked VM. */
+export interface VMForkNetworkPolicy {
+  /** Omit to inherit; pass an empty array to clear the allow list. */
+  allow?: string[];
+  /** Omit to inherit; pass an empty array to clear the drop list. */
+  drop?: string[];
+}
+
+export interface VMForkOptions {
+  /** Agent-readiness timeout in seconds. Forks always wait for the child agent. */
+  waitTimeoutSec?: number;
+  network?: VMForkNetworkPolicy;
+}
+
+export interface VMForkResponse {
+  hostname: string;
+  commitId?: string;
+  childHostname: string;
+  status: string;
+  parentStatus?: string;
+  childStatus?: string;
+  mode: string;
+}
+
+export interface VMNetworkPolicy {
+  allow: string[];
+  drop: string[];
+}
+
+export interface VMNetworkDescription {
+  mode?: string;
+  policySource?: string;
+  hostGroup: VMNetworkPolicy;
+  override?: CreateVMNetworkPolicy;
+  effective: VMNetworkPolicy;
+}
+
+export interface VMDescription {
+  hostname: string;
+  hostGroup?: string;
+  ip?: string;
+  ramBytes?: number;
+  cpus?: number;
+  createdAt?: string;
+  arch?: string;
+  tags?: string[];
+  status?: string;
+  persistent?: boolean;
+  storage?: string;
+  image?: string;
+  commitId?: string;
+  parentCommitId?: string;
+  network: VMNetworkDescription;
+}
+
 export interface VMStat {
   hostname: string;
   ip: string;
