@@ -11,6 +11,11 @@ import type {
   FSEntry,
   HostGroup,
   Secret,
+  VMCommitDeleteResponse,
+  VMCommitInfo,
+  VMCommitResponse,
+  VMDescription,
+  VMForkResponse,
   VMInfo,
   VMStat,
 } from './types.js';
@@ -71,6 +76,57 @@ export interface WireAgentHealth {
   agent_version?: string;
   system_uptime?: number;
   userdata_ran?: boolean;
+}
+
+export interface WireVMCommitResponse {
+  hostname: string;
+  commit_id: string;
+  status: string;
+  parent_status?: string;
+  mode?: string;
+  tags?: string[];
+  labels?: Record<string, string>;
+  cache_key?: string;
+}
+
+export interface WireVMCommitInfo {
+  commit_id: string;
+  source_hostname: string;
+  source_host_group: string;
+  created_at: string;
+  mode: string;
+  tags?: string[];
+  labels?: Record<string, string>;
+  cache_key?: string;
+}
+
+export interface WireVMCommitDeleteResponse {
+  commit_id: string;
+  status: string;
+}
+
+export interface WireVMForkResponse {
+  hostname: string;
+  commit_id?: string;
+  child_hostname: string;
+  status: string;
+  parent_status?: string;
+  child_status?: string;
+  mode?: string;
+}
+
+export interface WireVMDescription extends WireVM {
+  storage?: string;
+  image?: string;
+  commit_id?: string;
+  parent_commit_id?: string;
+  network: {
+    mode?: string;
+    policy_source?: string;
+    host_group: { allow: string[]; drop: string[] };
+    override?: WireCreateVMNetworkPolicy;
+    effective: { allow: string[]; drop: string[] };
+  };
 }
 
 export interface WireFSInfo {
@@ -158,6 +214,74 @@ export function agentHealthFromWire(w: WireAgentHealth): AgentHealth {
     ...(w.agent_version !== undefined && { agentVersion: w.agent_version }),
     ...(w.system_uptime !== undefined && { systemUptime: w.system_uptime }),
     ...(w.userdata_ran !== undefined && { userdataRan: w.userdata_ran }),
+  };
+}
+
+export function vmCommitFromWire(w: WireVMCommitResponse): VMCommitResponse {
+  return {
+    hostname: w.hostname,
+    commitId: w.commit_id,
+    status: w.status,
+    ...(w.parent_status !== undefined && { parentStatus: w.parent_status }),
+    mode: w.mode ?? '',
+    ...(w.tags !== undefined && { tags: w.tags }),
+    ...(w.labels !== undefined && { labels: w.labels }),
+    ...(w.cache_key !== undefined && { cacheKey: w.cache_key }),
+  };
+}
+
+export function vmCommitInfoFromWire(w: WireVMCommitInfo): VMCommitInfo {
+  return {
+    commitId: w.commit_id,
+    sourceHostname: w.source_hostname,
+    sourceHostGroup: w.source_host_group,
+    createdAt: w.created_at,
+    mode: w.mode,
+    ...(w.tags !== undefined && { tags: w.tags }),
+    ...(w.labels !== undefined && { labels: w.labels }),
+    ...(w.cache_key !== undefined && { cacheKey: w.cache_key }),
+  };
+}
+
+export function vmCommitDeleteFromWire(w: WireVMCommitDeleteResponse): VMCommitDeleteResponse {
+  return { commitId: w.commit_id, status: w.status };
+}
+
+export function vmForkFromWire(w: WireVMForkResponse): VMForkResponse {
+  return {
+    hostname: w.hostname,
+    ...(w.commit_id !== undefined && { commitId: w.commit_id }),
+    childHostname: w.child_hostname,
+    status: w.status,
+    ...(w.parent_status !== undefined && { parentStatus: w.parent_status }),
+    ...(w.child_status !== undefined && { childStatus: w.child_status }),
+    mode: w.mode ?? '',
+  };
+}
+
+export function vmDescriptionFromWire(w: WireVMDescription): VMDescription {
+  return {
+    hostname: w.hostname,
+    ...(w.hostgroup !== undefined && { hostGroup: w.hostgroup }),
+    ...(w.ip !== undefined && { ip: w.ip }),
+    ...(w.ram_bytes !== undefined && { ramBytes: w.ram_bytes }),
+    ...(w.cpus !== undefined && { cpus: w.cpus }),
+    ...(w.created_at !== undefined && { createdAt: w.created_at }),
+    ...(w.arch !== undefined && { arch: w.arch }),
+    ...(w.tags !== undefined && { tags: w.tags }),
+    ...(w.status !== undefined && { status: w.status }),
+    ...(w.persistent !== undefined && { persistent: w.persistent }),
+    ...(w.storage !== undefined && { storage: w.storage }),
+    ...(w.image !== undefined && { image: w.image }),
+    ...(w.commit_id !== undefined && { commitId: w.commit_id }),
+    ...(w.parent_commit_id !== undefined && { parentCommitId: w.parent_commit_id }),
+    network: {
+      ...(w.network.mode !== undefined && { mode: w.network.mode }),
+      ...(w.network.policy_source !== undefined && { policySource: w.network.policy_source }),
+      hostGroup: w.network.host_group,
+      ...(w.network.override !== undefined && { override: w.network.override }),
+      effective: w.network.effective,
+    },
   };
 }
 
