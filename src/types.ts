@@ -357,7 +357,10 @@ export type VMForkTagMode = 'append' | 'replace';
 export type VMForkFixup = 'hostname' | 'machine-id' | 'ssh-host-keys';
 
 export interface VMForkOptions {
-  /** Defaults to agent for compatibility; use none for an asynchronous fork. */
+  /**
+   * Defaults to agent. None acknowledges launch only; the daemon removes the
+   * child if requested asynchronous finalisation later fails.
+   */
   wait?: VMForkWait;
   /** Server-side agent/finalisation timeout in seconds when waiting. */
   waitTimeoutSec?: number;
