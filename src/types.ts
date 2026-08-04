@@ -352,11 +352,29 @@ export interface VMForkNetworkPolicy {
   drop?: string[];
 }
 
+export type VMForkWait = 'agent' | 'none';
+export type VMForkTagMode = 'append' | 'replace';
+export type VMForkFixup = 'hostname' | 'machine-id' | 'ssh-host-keys';
+
 export interface VMForkOptions {
-  /** Agent-readiness timeout in seconds. Forks always wait for the child agent. */
+  /** Defaults to agent for compatibility; use none for an asynchronous fork. */
+  wait?: VMForkWait;
+  /** Server-side agent/finalisation timeout in seconds when waiting. */
   waitTimeoutSec?: number;
   network?: VMForkNetworkPolicy;
+  /** Omit to inherit tags; provided tags append unless tagMode is replace. */
   tags?: string[];
+  tagMode?: VMForkTagMode;
+  /** Omit to inherit grants; pass an empty array to clear and blot secrets. */
+  secrets?: string[];
+  /** Defaults to true; false makes the fork ephemeral. */
+  persistent?: boolean;
+  /** Omit for all correctness fix-ups; pass an empty array to disable them. */
+  fixups?: VMForkFixup[];
+  /** Child vCPU count, up to the source host-group limit. */
+  vcpu?: number;
+  /** Child RAM in bytes, up to the source host-group limit. */
+  ramBytes?: number;
 }
 
 export interface VMForkResponse {
@@ -367,6 +385,7 @@ export interface VMForkResponse {
   parentStatus?: string;
   childStatus?: string;
   mode: string;
+  persistent?: boolean;
 }
 
 export interface VMNetworkPolicy {

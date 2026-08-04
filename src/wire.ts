@@ -114,6 +114,7 @@ export interface WireVMForkResponse {
   parent_status?: string;
   child_status?: string;
   mode?: string;
+  persistent?: boolean;
 }
 
 export interface WireVMDescription extends WireVM {
@@ -258,6 +259,7 @@ export function vmForkFromWire(w: WireVMForkResponse): VMForkResponse {
     ...(w.parent_status !== undefined && { parentStatus: w.parent_status }),
     ...(w.child_status !== undefined && { childStatus: w.child_status }),
     mode: w.mode ?? '',
+    ...(w.persistent !== undefined && { persistent: w.persistent }),
   };
 }
 

@@ -36,8 +36,8 @@ await vm.delete();
 ## Cold forks
 
 A stopped persistent VM can be committed as an immutable disk parent, then
-forked into cold-booted children. Fork calls always wait until the child agent
-has finalised its guest identity.
+forked into cold-booted children. Fork calls wait for agent readiness and guest
+identity finalisation by default; use `wait: 'none'` for asynchronous startup.
 
 ```ts
 await vm.shutdown();
@@ -47,9 +47,15 @@ const parent = await vm.commit({
 });
 
 const child = await parent.fork({
+  wait: 'agent',
   waitTimeoutSec: 120,
+  persistent: false,
+  vcpu: 1,
+  ramBytes: 512 * 1024 * 1024,
   network: { allow: [], drop: ['0.0.0.0/0'] },
+  tagMode: 'replace',
   tags: ['job=node-build'],
+  secrets: [],
 });
 
 const description = await child.describe();
