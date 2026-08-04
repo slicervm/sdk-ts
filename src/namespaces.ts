@@ -42,6 +42,7 @@ import {
   type WireVM,
   type WireVMStat,
 } from './wire.js';
+import { buildForkRequest } from './fork.js';
 import { VM } from './vm.js';
 
 export class HostGroupsAPI {
@@ -185,21 +186,11 @@ export class CommitsAPI {
     opts: VMForkOptions = {},
   ): Promise<VMForkResponse> {
     const id = validateCommitId(commitId);
-    const qs = new URLSearchParams({ wait: 'agent' });
-    if (opts.waitTimeoutSec !== undefined && opts.waitTimeoutSec > 0) {
-      qs.set('timeout', `${opts.waitTimeoutSec}s`);
-    }
-    const body =
-      opts.network !== undefined || (opts.tags?.length ?? 0) > 0
-        ? {
-            ...(opts.network !== undefined && { network: opts.network }),
-            ...((opts.tags?.length ?? 0) > 0 && { tags: opts.tags }),
-          }
-        : undefined;
+    const request = buildForkRequest(opts);
     const wire = await this.transport.request<WireVMForkResponse>(
       'POST',
-      `/vm/commits/${encodeURIComponent(id)}/fork?${qs.toString()}`,
-      body,
+      `/vm/commits/${encodeURIComponent(id)}/fork?${request.query}`,
+      request.body,
     );
     return vmForkFromWire(wire);
   }

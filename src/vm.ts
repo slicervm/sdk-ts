@@ -47,6 +47,7 @@ import {
   type WireVMDescription,
   type WireVMForkResponse,
 } from './wire.js';
+import { buildForkRequest } from './fork.js';
 
 /** Per-VM filesystem operations. */
 export class VMFileSystem {
@@ -641,23 +642,11 @@ async function forkPath(
   opts: VMForkOptions,
 ): Promise<VMForkResponse> {
   const id = validateCommitId(commitId);
-  const q = new URLSearchParams();
-  q.set('wait', 'agent');
-  if (opts.waitTimeoutSec !== undefined && opts.waitTimeoutSec > 0) {
-    q.set('timeout', `${opts.waitTimeoutSec}s`);
-  }
-  const query = q.toString() ? `?${q.toString()}` : '';
-  const body =
-    opts.network !== undefined || (opts.tags?.length ?? 0) > 0
-      ? {
-          ...(opts.network !== undefined && { network: opts.network }),
-          ...((opts.tags?.length ?? 0) > 0 && { tags: opts.tags }),
-        }
-      : undefined;
+  const request = buildForkRequest(opts);
   const wire = await transport.request<WireVMForkResponse>(
     'POST',
-    `/vm/commits/${encodeURIComponent(id)}/fork${query}`,
-    body,
+    `/vm/commits/${encodeURIComponent(id)}/fork?${request.query}`,
+    request.body,
   );
   return vmForkFromWire(wire);
 }

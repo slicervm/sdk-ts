@@ -50,17 +50,27 @@ describe('cold fork workflow', () => {
           );
         } else if (
           req.method === 'POST' &&
-          req.url === '/vm/commits/cmt-demo/fork?wait=agent&timeout=45s'
+          req.url === '/vm/commits/cmt-demo/fork?wait=none&timeout=45s'
         ) {
-          expect(body).toEqual({ network: { allow: [] }, tags: ['job=review'] });
+          expect(body).toEqual({
+            network: { allow: [] },
+            tags: ['job=review'],
+            tag_mode: 'replace',
+            secrets: [],
+            persistent: false,
+            fixups: [],
+            vcpu: 1,
+            ram_bytes: 536870912,
+          });
           res.end(
             JSON.stringify({
               hostname: 'demo-2',
               source_hostname: 'demo-1',
               commit_id: 'cmt-demo',
               status: 'forked',
-              child_status: 'running',
+              child_status: 'starting',
               mode: 'disk',
+              persistent: false,
             }),
           );
         } else if (req.method === 'GET' && req.url === '/vm/demo-2') {
@@ -97,11 +107,24 @@ describe('cold fork workflow', () => {
     expect(committed.commitId).toBe('cmt-demo');
     expect((await client.commits.list({ tags: ['base', 'test'], cacheKey: 'cache-v1' }))[0])
       .toMatchObject({ commitId: 'cmt-demo', sourceHostGroup: 'demo' });
-    const child = await committed.fork({
+    const fork = await committed.forkRaw({
+      wait: 'none',
       waitTimeoutSec: 45,
       network: { allow: [] },
       tags: ['job=review'],
+      tagMode: 'replace',
+      secrets: [],
+      persistent: false,
+      fixups: [],
+      vcpu: 1,
+      ramBytes: 512 * 1024 * 1024,
     });
+    expect(fork).toMatchObject({
+      hostname: 'demo-2',
+      childStatus: 'starting',
+      persistent: false,
+    });
+    const child = client.vms.attach('demo', fork.hostname);
     expect(child.hostname).toBe('demo-2');
     const description = await child.describe();
     expect(description.parentCommitId).toBe('cmt-demo');
@@ -111,6 +134,33 @@ describe('cold fork workflow', () => {
       status: 'deleted',
     });
     expect(requests).toHaveLength(5);
+  });
+
+  it('keeps agent wait as the SDK default', async () => {
+    server = http.createServer((req, res) => {
+      expect(req.method).toBe('POST');
+      expect(req.url).toBe('/vm/commits/cmt-demo/fork?wait=agent');
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          hostname: 'demo-2',
+          source_hostname: 'demo-1',
+          commit_id: 'cmt-demo',
+          status: 'forked',
+          child_status: 'running',
+          mode: 'disk',
+          persistent: true,
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const client = new SlicerClient({ baseURL: `http://127.0.0.1:${port}` });
+
+    await expect(client.commits.fork('cmt-demo')).resolves.toMatchObject({
+      childStatus: 'running',
+      persistent: true,
+    });
   });
 
   it.each(['', '../commit', 'commit/child', 'commit\\child'])(
