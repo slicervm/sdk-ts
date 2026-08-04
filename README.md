@@ -37,7 +37,9 @@ await vm.delete();
 
 A stopped persistent VM can be committed as an immutable disk parent, then
 forked into cold-booted children. Fork calls wait for agent readiness and guest
-identity finalisation by default; use `wait: 'none'` for asynchronous startup.
+identity finalisation by default. `wait: 'none'` acknowledges launch only; if
+requested asynchronous finalisation fails, the daemon removes the child rather
+than expose cloned identity or secrets with partially applied policy.
 
 ```ts
 await vm.shutdown();
