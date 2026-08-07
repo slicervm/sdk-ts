@@ -42,4 +42,27 @@ describe('mutable VM tags', () => {
       { method: 'PATCH', path: '/vm/demo-1/tags', body: { replace: [] } },
     ]);
   });
+
+  it('retains initial tags on created VM handles', async () => {
+    server = http.createServer((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          hostname: 'demo-1',
+          hostgroup: 'demo',
+          ip: '192.0.2.10',
+          created_at: '2026-08-07T00:00:00Z',
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const client = new SlicerClient({ baseURL: `http://127.0.0.1:${port}` });
+    const tags = ['name=builder', 'role=build'];
+
+    const vm = await client.vms.create('demo', { tags });
+    tags.push('changed-after-create');
+
+    expect(vm.tags).toEqual(['name=builder', 'role=build']);
+  });
 });
