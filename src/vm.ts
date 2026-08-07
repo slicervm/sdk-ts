@@ -33,6 +33,8 @@ import {
   type VMForkOptions,
   type VMForkResponse,
   type VMLogs,
+  type VMTagResponse,
+  type VMTagUpdate,
   type WaitOptions,
 } from './types.js';
 import {
@@ -253,6 +255,7 @@ export interface VMInit {
   ip?: string;
   createdAt?: string;
   arch?: string;
+  tags?: string[];
 }
 
 export class CommittedVM {
@@ -309,6 +312,7 @@ export class VM {
   readonly ip?: string;
   readonly createdAt?: string;
   readonly arch?: string;
+  tags?: string[];
   readonly fs: VMFileSystem;
   readonly bg: VMBg;
 
@@ -321,11 +325,43 @@ export class VM {
     if (init.ip !== undefined) this.ip = init.ip;
     if (init.createdAt !== undefined) this.createdAt = init.createdAt;
     if (init.arch !== undefined) this.arch = init.arch;
+    if (init.tags !== undefined) this.tags = init.tags;
     this.fs = new VMFileSystem(transport, this.hostname);
     this.bg = new VMBg(transport, this.hostname);
   }
 
   // --- lifecycle --------------------------------------------------------
+
+  async getTags(): Promise<string[]> {
+    const response = await this.transport.request<VMTagResponse>(
+      'GET',
+      `/vm/${encodeURIComponent(this.hostname)}/tags`,
+    );
+    this.tags = response.tags;
+    return response.tags;
+  }
+
+  async updateTags(update: VMTagUpdate): Promise<string[]> {
+    const response = await this.transport.request<VMTagResponse>(
+      'PATCH',
+      `/vm/${encodeURIComponent(this.hostname)}/tags`,
+      update,
+    );
+    this.tags = response.tags;
+    return response.tags;
+  }
+
+  async addTags(...tags: string[]): Promise<string[]> {
+    return this.updateTags({ add: tags });
+  }
+
+  async removeTags(...tags: string[]): Promise<string[]> {
+    return this.updateTags({ remove: tags });
+  }
+
+  async replaceTags(tags: string[]): Promise<string[]> {
+    return this.updateTags({ replace: tags });
+  }
 
   async delete(): Promise<void> {
     await this.transport.request(

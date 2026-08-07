@@ -114,6 +114,7 @@ export class VMsAPI {
       ...(found.ip !== undefined && { ip: found.ip }),
       ...(found.createdAt !== undefined && { createdAt: found.createdAt }),
       ...(found.arch !== undefined && { arch: found.arch }),
+      ...(found.tags !== undefined && { tags: found.tags }),
     });
   }
 

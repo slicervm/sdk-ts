@@ -26,6 +26,17 @@ export interface VMInfo {
   persistent?: boolean;
 }
 
+export interface VMTagResponse {
+  hostname: string;
+  tags: string[];
+}
+
+export interface VMTagUpdate {
+  add?: string[];
+  remove?: string[];
+  replace?: string[];
+}
+
 /**
  * Per-launch network policy override for isolated host groups.
  * Omitted lists inherit the host group's policy. Empty lists intentionally
