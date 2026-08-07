@@ -92,6 +92,7 @@ export class VMsAPI {
       ...(res.ip !== undefined && { ip: res.ip }),
       ...(res.createdAt !== undefined && { createdAt: res.createdAt }),
       ...(res.arch !== undefined && { arch: res.arch }),
+      ...(req.tags !== undefined && { tags: [...req.tags] }),
     });
   }
 
