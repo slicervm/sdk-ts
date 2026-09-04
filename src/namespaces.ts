@@ -9,6 +9,9 @@ import {
   type CreateVMOptions,
   type CreateVMRequest,
   type CreateVMResponse,
+  type CommitInfo,
+  type ForkVMOptions,
+  type ListCommitsOptions,
   type HostGroup,
   type ListOptions,
   type Secret,
@@ -136,6 +139,53 @@ export class VMsAPI {
       createVMReqToWire(req),
     );
     return createVMResFromWire(wire);
+  }
+
+  /**
+   * Cold-fork a committed VM into a child that starts from the parent's
+   * exact disk state. Get a `commitId` from `vm.commit()`. Returns a VM
+   * handle for the child.
+   */
+  async fork(commitId: string, opts: ForkVMOptions = {}): Promise<VM> {
+    const body: Record<string, unknown> = {};
+    if (opts.tags) body.tags = opts.tags;
+    if (opts.tagMode) body.tag_mode = opts.tagMode;
+    if (opts.vcpu) body.vcpu = opts.vcpu;
+    if (opts.ramBytes) body.ram_bytes = opts.ramBytes;
+    if (opts.persistent !== undefined) body.persistent = opts.persistent;
+    const w = await this.transport.request<{ hostname: string; ip?: string }>(
+      'POST',
+      `/vm/commits/${encodeURIComponent(commitId)}/fork`,
+      body,
+    );
+    return new VM(this.transport, {
+      hostname: w.hostname,
+      hostGroup: opts.hostGroup ?? '',
+      ...(w.ip !== undefined && { ip: w.ip }),
+    });
+  }
+
+  /** List fork-parent commits on the daemon, optionally filtered. */
+  async listCommits(opts: ListCommitsOptions = {}): Promise<CommitInfo[]> {
+    const qs = new URLSearchParams();
+    if (opts.cacheKey) qs.set('cache_key', opts.cacheKey);
+    for (const t of opts.tags ?? []) qs.set('tag', t);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    const wire = await this.transport.request<Array<Record<string, unknown>>>(
+      'GET',
+      `/vm/commits${query}`,
+    );
+    return (wire ?? []).map((c) => ({
+      commitId: String(c.commit_id ?? ''),
+      ...(c.cache_key !== undefined && { cacheKey: String(c.cache_key) }),
+      ...(Array.isArray(c.tags) && { tags: c.tags as string[] }),
+      ...c,
+    }));
+  }
+
+  /** Delete a fork-parent commit. Fails while a child still references it. */
+  async deleteCommit(commitId: string): Promise<void> {
+    await this.transport.request('DELETE', `/vm/commits/${encodeURIComponent(commitId)}`);
   }
 }
 

@@ -18,6 +18,8 @@ import {
   type FSWatchEvent,
   type FSWatchRequest,
   type ShutdownRequest,
+  type CommitVMOptions,
+  type CommittedVM,
   SlicerAPIError,
   type VMLogs,
   type WaitOptions,
@@ -340,6 +342,34 @@ export class VM {
 
   async relaunch(): Promise<void> {
     await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/relaunch`);
+  }
+
+  /**
+   * Commit this (stopped) VM into an immutable fork parent. The returned
+   * `commitId` can be cold-forked into many children with
+   * `client.vms.fork()`. Stop the VM first with `shutdown()`.
+   */
+  async commit(opts: CommitVMOptions = {}): Promise<CommittedVM> {
+    const body: Record<string, unknown> = {};
+    if (opts.cacheKey) body.cache_key = opts.cacheKey;
+    if (opts.tags) body.tags = opts.tags;
+    if (opts.labels) body.labels = opts.labels;
+    const w = await this.transport.request<{
+      hostname: string;
+      commit_id: string;
+      status: string;
+      mode: string;
+      tags?: string[];
+      cache_key?: string;
+    }>('POST', `/vm/${encodeURIComponent(this.hostname)}/commit`, body);
+    return {
+      hostname: w.hostname,
+      commitId: w.commit_id,
+      status: w.status,
+      mode: w.mode,
+      ...(w.tags !== undefined && { tags: w.tags }),
+      ...(w.cache_key !== undefined && { cacheKey: w.cache_key }),
+    };
   }
 
   /** Mac-only on current daemons. Throws `SlicerAPIError 404` on Linux. */

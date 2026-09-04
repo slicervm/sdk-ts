@@ -309,3 +309,49 @@ export class SlicerAPIError extends Error {
 export const MiB = (n: number): number => n * 1024 * 1024;
 export const GiB = (n: number): number => n * 1024 * 1024 * 1024;
 export const NonRootUser = 0xffffffff;
+
+// --- cold fork (commit + fork) -------------------------------------------
+
+/** Options for committing a stopped VM into an immutable fork parent. */
+export interface CommitVMOptions {
+  /** Reuse a prior commit with the same key instead of creating a new one. */
+  cacheKey?: string;
+  tags?: string[];
+  labels?: Record<string, string>;
+}
+
+/** Result of committing a VM — `commitId` is the fork parent reference. */
+export interface CommittedVM {
+  hostname: string;
+  commitId: string;
+  status: string;
+  mode: string;
+  tags?: string[];
+  cacheKey?: string;
+}
+
+/** A commit as returned by `listCommits()`. Shape is daemon-defined. */
+export interface CommitInfo {
+  commitId: string;
+  cacheKey?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
+
+/** Filter for `listCommits()`. */
+export interface ListCommitsOptions {
+  cacheKey?: string;
+  tags?: string[];
+}
+
+/** Options for forking a committed VM into a child. */
+export interface ForkVMOptions {
+  tags?: string[];
+  /** `replace` overwrites inherited tags; `append` (default) adds to them. */
+  tagMode?: 'append' | 'replace';
+  vcpu?: number;
+  ramBytes?: number;
+  persistent?: boolean;
+  /** Host group the child lands in — stamped on the returned VM handle. */
+  hostGroup?: string;
+}
