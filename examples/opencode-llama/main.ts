@@ -19,7 +19,7 @@
 //
 // SLICER_URL / SLICER_TOKEN(_FILE) point the SDK at slicerd.
 
-import { SlicerClient } from '@slicervm/sdk';
+import { SlicerClient, type VM } from '@slicervm/sdk';
 
 const HOSTGROUP = 'lab';
 const PROXY_HOST = '192.168.222.1';
@@ -53,30 +53,6 @@ async function main() {
   const tok = created.token!;
   console.log(`proxy client web-1 minted, token=${tok.slice(0, 12)}…`);
 
-  // 2. Phase 1 — broad allow so arkade can fetch opencode.
-  //    Keep cloudflare-dns narrow even in phase 1: only POST /dns-query.
-  await c.proxy.allows.add({
-    client: 'web-1',
-    host: 'cloudflare-dns.com',
-    methods: ['POST'],
-    paths: ['/dns-query'],
-  });
-  await c.proxy.allows.add({ client: 'web-1', host: '*' });
-
-  // 3. Launch an isolated VM. Userdata only does one thing: bring up
-  //    the in-VM transparent helper pointed at our dummy-adapter proxy.
-  //    The new positional shorthand composes the upstream URL for us.
-  const userdata = `#!/bin/bash
-set -eux
-/usr/local/bin/slicer-agent proxy install ${PROXY_HOST} --token ${tok}
-`;
-  const vm = await c.vms.create(
-    HOSTGROUP,
-    { userdata },
-    { wait: 'userdata', waitTimeoutSec: 90 },
-  );
-  console.log(`VM up: ${vm.hostname}`);
-
   // Env vars guest workloads (arkade, opencode) need to honour.
   const env = [
     `HTTP_PROXY=http://proxy:${tok}@${PROXY_HOST}:${HTTP_PORT}`,
@@ -85,7 +61,34 @@ set -eux
     `HOME=${GUEST_HOME}`,
   ];
 
+  // Everything from here on runs inside try/finally so a failed allow
+  // rule or VM launch still tears down the proxy client and its rules.
+  let vm: VM | undefined;
   try {
+    // 2. Phase 1 — broad allow so arkade can fetch opencode.
+    //    Keep cloudflare-dns narrow even in phase 1: only POST /dns-query.
+    await c.proxy.allows.add({
+      client: 'web-1',
+      host: 'cloudflare-dns.com',
+      methods: ['POST'],
+      paths: ['/dns-query'],
+    });
+    await c.proxy.allows.add({ client: 'web-1', host: '*' });
+
+    // 3. Launch an isolated VM. Userdata only does one thing: bring up
+    //    the in-VM transparent helper pointed at our dummy-adapter proxy.
+    //    The new positional shorthand composes the upstream URL for us.
+    const userdata = `#!/bin/bash
+set -eux
+/usr/local/bin/slicer-agent proxy install ${PROXY_HOST} --token ${tok}
+`;
+    vm = await c.vms.create(
+      HOSTGROUP,
+      { userdata },
+      { wait: 'userdata', waitTimeoutSec: 90 },
+    );
+    console.log(`VM up: ${vm.hostname}`);
+
     // 4. arkade is preinstalled in the slicer-systemd image; just fetch
     //    opencode through the proxy as the ubuntu user. Lands at
     //    $HOME/.arkade/bin/opencode by default — no sudo needed.
@@ -188,9 +191,12 @@ set -eux
       throw new Error(`opencode exited ${run.exitCode}`);
     }
   } finally {
-    // 8. Cleanup. Always run, even on failure.
-    console.log(`deleting VM ${vm.hostname}…`);
-    await vm.delete().catch((err) => console.warn('vm delete:', err));
+    // 8. Cleanup. Always run, even on failure. The VM is absent if
+    //    launch failed; the secret and proxy client go regardless.
+    if (vm) {
+      console.log(`deleting VM ${vm.hostname}…`);
+      await vm.delete().catch((err) => console.warn('vm delete:', err));
+    }
     await c.proxy.secrets
       .delete('llamacpp-bearer')
       .catch((err) => console.warn('proxy secret delete:', err));
