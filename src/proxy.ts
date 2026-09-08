@@ -24,12 +24,33 @@
 import type { TransportClient } from './transport.js';
 
 /** Credential type for upstream injection. */
-export type ProxySecretType = 'bearer' | 'basic' | 'oauth-client-creds';
+export type ProxySecretType =
+  | 'bearer'
+  | 'basic'
+  | 'oauth-client-creds'
+  | 'oauth-codex'
+  | 'oauth-claude'
+  | 'oauth-github-copilot'
+  | 'oauth-xai'
+  | 'github-app-user'
+  | 'github-app';
 export const ProxySecretBearer: ProxySecretType = 'bearer';
 /** For basic auth, the secret value must be in `user:pass` form. */
 export const ProxySecretBasic: ProxySecretType = 'basic';
 /** OAuth 2.0 client credentials exchanged and renewed by the proxy host. */
 export const ProxySecretOAuthClientCredentials: ProxySecretType = 'oauth-client-creds';
+/** Adopt and refresh a host-side Codex ChatGPT OAuth credential. */
+export const ProxySecretOAuthCodex: ProxySecretType = 'oauth-codex';
+/** Adopt and refresh a host-side Claude Code OAuth credential. */
+export const ProxySecretOAuthClaude: ProxySecretType = 'oauth-claude';
+/** Adopt and refresh a host-side GitHub Copilot OAuth credential. */
+export const ProxySecretOAuthGitHubCopilot: ProxySecretType = 'oauth-github-copilot';
+/** Adopt and refresh a host-side xAI Grok OAuth credential. */
+export const ProxySecretOAuthXAI: ProxySecretType = 'oauth-xai';
+/** Adopt and refresh a host-side GitHub App user OAuth credential. */
+export const ProxySecretGitHubAppUser: ProxySecretType = 'github-app-user';
+/** Adopt a host-side GitHub App tuple and inject installation-token Git auth. */
+export const ProxySecretGitHubApp: ProxySecretType = 'github-app';
 
 /** A registered proxy client. Tokens are never returned by list/get. */
 export interface ProxyClient {
@@ -64,6 +85,9 @@ export interface ProxySecret {
   /** Defaults to `bearer` when empty in older state files. */
   type?: ProxySecretType;
   createdAt: string;
+  updatedAt?: string;
+  adoptedAt?: string;
+  refreshedAt?: string;
 }
 
 export interface CreateProxySecretRequest {
@@ -77,8 +101,30 @@ export interface CreateProxySecretRequest {
    * inner request). For `oauth-client-creds`, pass top-level JSON containing
    * `token_endpoint`, `client_id`, and `client_secret`; optional `scope` is
    * supported. The proxy obtains, caches, and renews the bearer host-side.
+   * For `oauth-codex`, pass a Codex auth.json or
+   * minimal OAuth JSON containing access_token, refresh_token, and
+   * account_id. For `oauth-claude`, pass Claude Code's .credentials.json
+   * or minimal OAuth JSON containing accessToken and refreshToken. For
+   * `oauth-github-copilot`, pass opencode auth.json or minimal OAuth JSON
+   * containing a GitHub Copilot gho_* or ghu_* token. For `oauth-xai`, pass JSON
+   * emitted by `slicer proxy oauth xai`, or equivalent top-level JSON
+   * containing access_token and refresh_token. For `github-app-user`, pass
+   * JSON emitted by `slicer proxy oauth github-app-user`, or equivalent
+   * top-level JSON containing access_token. The proxy stores and refreshes
+   * OAuth credentials host-side. For `github-app`, pass top-level JSON
+   * containing app_id and either private_key_file or private_key. With
+   * private_key_file, the proxy keeps the PEM file on the host; with
+   * private_key, the PEM is stored in proxy state. The proxy mints GitHub App
+   * installation tokens in memory and injects Git HTTPS Basic auth for
+   * github.com clone/fetch requests.
    */
   value: string;
+  /**
+   * Overwrite an existing secret with the same name. Useful after the
+   * host-side OAuth login has been refreshed manually and the proxy
+   * should re-adopt the credential without rewriting allow rules.
+   */
+  force?: boolean;
 }
 
 /**
@@ -88,6 +134,8 @@ export interface CreateProxySecretRequest {
  *   on the inner request and substitutes the secret's value.
  * - `methods`/`paths` are optional filters (any-of within each list,
  *   all-of across lists). Empty list = any.
+ * - `ports` is optional. Empty means the default web ports 80 and 443
+ *   for backwards compatibility with older host-only rules.
  * - When `passthrough` is true, the proxy splices TCP both ways at
  *   CONNECT without terminating TLS. Cert-pinned clients work
  *   unchanged. Mutually exclusive with `secret`, `methods`, `paths`;
@@ -98,6 +146,7 @@ export interface ProxyAllowRule {
   secret?: string;
   methods?: string[];
   paths?: string[];
+  ports?: number[];
   /** RFC 3339 timestamp; absent / zero-value when no expiry. */
   expires?: string;
   passthrough?: boolean;
@@ -110,6 +159,7 @@ export interface AddProxyAllowRequest {
   secret?: string;
   methods?: string[];
   paths?: string[];
+  ports?: number[];
   /**
    * Time-to-live in seconds. 0 / omitted = never expires. Resolved to
    * an absolute `expires` timestamp on the returned rule.
@@ -122,7 +172,7 @@ export interface AddProxyAllowRequest {
 /**
  * Input to `allows.removeByTuple`. Mirrors the create payload minus
  * `ttlSeconds` (TTL is mutable lifetime, not part of identity). The
- * proxy matches the rule by (host, methods, paths, passthrough) and
+ * proxy matches the rule by (host, methods, paths, ports, passthrough) and
  * removes the single matching rule. Use when several rules share a
  * host and you want surgical removal of one — pass exactly the same
  * fields you used at create time.
@@ -133,6 +183,7 @@ export interface RemoveProxyAllowByTupleRequest {
   secret?: string;
   methods?: string[];
   paths?: string[];
+  ports?: number[];
   passthrough?: boolean;
 }
 
@@ -154,6 +205,9 @@ interface WireProxySecret {
   host: string;
   type?: string;
   created_at: string;
+  updated_at?: string;
+  adopted_at?: string;
+  refreshed_at?: string;
 }
 
 interface WireProxyAllowRule {
@@ -161,6 +215,7 @@ interface WireProxyAllowRule {
   secret?: string;
   methods?: string[];
   paths?: string[];
+  ports?: number[];
   expires?: string;
   passthrough?: boolean;
 }
@@ -176,6 +231,9 @@ function clientCreatedFromWire(w: WireProxyClientCreated): ProxyClientCreated {
 function secretFromWire(w: WireProxySecret): ProxySecret {
   const out: ProxySecret = { name: w.name, host: w.host, createdAt: w.created_at };
   if (w.type) out.type = w.type as ProxySecretType;
+  if (w.updated_at && w.updated_at !== '0001-01-01T00:00:00Z') out.updatedAt = w.updated_at;
+  if (w.adopted_at && w.adopted_at !== '0001-01-01T00:00:00Z') out.adoptedAt = w.adopted_at;
+  if (w.refreshed_at && w.refreshed_at !== '0001-01-01T00:00:00Z') out.refreshedAt = w.refreshed_at;
   return out;
 }
 
@@ -184,6 +242,7 @@ function ruleFromWire(w: WireProxyAllowRule): ProxyAllowRule {
   if (w.secret) out.secret = w.secret;
   if (w.methods && w.methods.length > 0) out.methods = w.methods;
   if (w.paths && w.paths.length > 0) out.paths = w.paths;
+  if (w.ports && w.ports.length > 0) out.ports = w.ports;
   if (w.expires && w.expires !== '0001-01-01T00:00:00Z') out.expires = w.expires;
   if (w.passthrough) out.passthrough = w.passthrough;
   return out;
@@ -251,6 +310,7 @@ export class ProxySecretsAPI {
       value: req.value,
     };
     if (req.type) body.type = req.type;
+    if (req.force) body.force = true;
     await this.transport.request('POST', '/proxy/v1/secrets', body);
   }
 
@@ -280,6 +340,7 @@ export class ProxyAllowsAPI {
     if (req.secret) body.secret = req.secret;
     if (req.methods && req.methods.length > 0) body.methods = req.methods;
     if (req.paths && req.paths.length > 0) body.paths = req.paths;
+    if (req.ports && req.ports.length > 0) body.ports = req.ports;
     if (req.ttlSeconds && req.ttlSeconds > 0) body.ttl_seconds = req.ttlSeconds;
     if (req.passthrough) body.passthrough = true;
     const wire = await this.transport.request<WireProxyAllowRule>(
@@ -305,7 +366,7 @@ export class ProxyAllowsAPI {
 
   /**
    * Surgical revoke: removes the single rule whose
-   * (host, methods, paths, passthrough) tuple matches the request.
+   * (host, methods, paths, ports, passthrough) tuple matches the request.
    * Pass exactly the same fields you used at create time. Method and
    * host casing are normalised server-side, so `"GET"` / `"get"` and
    * `"github.com"` / `"GITHUB.COM"` all match the same stored rule.
@@ -320,6 +381,7 @@ export class ProxyAllowsAPI {
     if (req.secret) body.secret = req.secret;
     if (req.methods && req.methods.length > 0) body.methods = req.methods;
     if (req.paths && req.paths.length > 0) body.paths = req.paths;
+    if (req.ports && req.ports.length > 0) body.ports = req.ports;
     if (req.passthrough) body.passthrough = true;
     await this.transport.request('POST', '/proxy/v1/allows/revoke', body);
   }
