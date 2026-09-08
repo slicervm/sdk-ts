@@ -1,7 +1,9 @@
 // End-to-end demo: launch an isolated microVM whose only egress is a
 // host-side slicer-proxy. Phase 1 opens a wildcard so we can install
-// opencode via arkade. Phase 2 swaps in a single allow rule pinned to a
-// llama.cpp inference endpoint and runs `opencode run` through it.
+// opencode via arkade. Phase 2 drops the wildcard and pins egress to the
+// llama.cpp inference endpoint, keeping only the narrow DNS-over-HTTPS
+// resolver rule the guest needs (the VM runs with --no-dns), then runs
+// `opencode run` through it.
 //
 // Pre-reqs on the host (one-shot):
 //   sudo ip link add slicer-proxy0 type dummy
@@ -67,7 +69,9 @@ async function main() {
   let createdSecret = false;
   try {
     // 2. Phase 1 — broad allow so arkade can fetch opencode.
-    //    Keep cloudflare-dns narrow even in phase 1: only POST /dns-query.
+    //    The VM has no DNS (--no-dns), so the guest resolves names via
+    //    DNS-over-HTTPS through the proxy. That rule stays for the whole
+    //    run and is kept narrow: only POST /dns-query on cloudflare-dns.com.
     await c.proxy.allows.add({
       client: 'web-1',
       host: 'cloudflare-dns.com',
@@ -114,7 +118,7 @@ set -eux
     // request the proxy strips the client's Authorization header and
     // substitutes the real bearer. The guest only ever sees the
     // placeholder we ship in opencode.json.
-    console.log('locking down to llama.cpp host only, secret stays host-side…');
+    console.log('locking down to llama.cpp host (plus the DoH resolver), secret stays host-side…');
     await c.proxy.secrets.create({
       name: 'llamacpp-bearer',
       host: LLAMACPP_HOST,
@@ -128,6 +132,14 @@ set -eux
       host: LLAMACPP_HOST,
       secret: 'llamacpp-bearer',
     });
+
+    // Egress is now exactly two hosts: the DoH resolver and the inference
+    // endpoint. Fail loudly if anything else survived the wildcard removal.
+    const expectedHosts = ['cloudflare-dns.com', LLAMACPP_HOST].sort().join(',');
+    const remainingHosts = (await c.proxy.clients.rules('web-1')).map((r) => r.host).sort().join(',');
+    if (remainingHosts !== expectedHosts) {
+      throw new Error(`unexpected allow rules after lockdown: ${remainingHosts}`);
+    }
 
     // 6. Write opencode config: a custom OpenAI-compatible provider
     //    pointing at the llama.cpp endpoint. The Authorization header

@@ -181,7 +181,12 @@ async function main() {
       await client.proxy.allows.removeByTuple(r);
     }
     const remaining = await client.proxy.clients.rules(clientName);
-    console.log(`  rules remaining for ${clientName}: ${remaining.length}`);
+    if (remaining.length !== 0) {
+      throw new Error(
+        `expected zero proxy rules after lockdown, found ${remaining.length}: ${remaining.map((r) => r.host).join(', ')}`,
+      );
+    }
+    console.log(`  rules remaining for ${clientName}: 0`);
 
     console.log(`→ opening forward ${HOST_FWD} → VM:${SITE_PORT}…`);
     const fwd = await vm.forward(`${HOST_FWD}:127.0.0.1:${SITE_PORT}`);
