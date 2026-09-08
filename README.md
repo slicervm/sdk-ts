@@ -69,6 +69,12 @@ await vm.delete();
 await client.commits.delete(parent.commitId);
 ```
 
+## Examples
+
+- [slicer-x11](https://github.com/alexellis/slicer-x11) — a disposable cloud
+  desktop built on this SDK: cold-fork a golden microVM per session and stream
+  it to the browser over noVNC.
+
 ## Status
 
 Pre-release. See `ts-plan.md`.
