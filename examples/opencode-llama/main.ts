@@ -17,7 +17,7 @@
 //   sudo -E slicer up lab.yaml &
 //   slicer proxy up --bind 192.168.222.1 --san 192.168.222.1 &
 //
-// SLICER_URL / SLICER_TOKEN(_FILE) point the SDK at slicerd.
+// SLICER_URL / SLICER_TOKEN point the SDK at slicerd.
 
 import { SlicerClient, type VM } from '@slicervm/sdk';
 
@@ -64,6 +64,7 @@ async function main() {
   // Everything from here on runs inside try/finally so a failed allow
   // rule or VM launch still tears down the proxy client and its rules.
   let vm: VM | undefined;
+  let createdSecret = false;
   try {
     // 2. Phase 1 — broad allow so arkade can fetch opencode.
     //    Keep cloudflare-dns narrow even in phase 1: only POST /dns-query.
@@ -120,6 +121,7 @@ set -eux
       type: 'bearer',
       value: BEARER,
     });
+    createdSecret = true;
     await c.proxy.allows.remove('web-1', '*');
     await c.proxy.allows.add({
       client: 'web-1',
@@ -197,9 +199,13 @@ set -eux
       console.log(`deleting VM ${vm.hostname}…`);
       await vm.delete().catch((err) => console.warn('vm delete:', err));
     }
-    await c.proxy.secrets
-      .delete('llamacpp-bearer')
-      .catch((err) => console.warn('proxy secret delete:', err));
+    // Only remove the secret this run created; a create that failed
+    // because the name already exists must not delete the user's own.
+    if (createdSecret) {
+      await c.proxy.secrets
+        .delete('llamacpp-bearer')
+        .catch((err) => console.warn('proxy secret delete:', err));
+    }
     await c.proxy.clients.delete('web-1').catch((err) => console.warn('proxy client delete:', err));
   }
 }
