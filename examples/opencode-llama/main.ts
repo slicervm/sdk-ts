@@ -84,7 +84,7 @@ async function main() {
     //    the in-VM transparent helper pointed at our dummy-adapter proxy.
     //    The new positional shorthand composes the upstream URL for us.
     const userdata = `#!/bin/bash
-set -eux
+set -eu
 /usr/local/bin/slicer-agent proxy install ${PROXY_HOST} --token ${tok}
 `;
     vm = await c.vms.create(
