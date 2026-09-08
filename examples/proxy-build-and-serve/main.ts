@@ -51,7 +51,7 @@ const SITE_DIR = '/opt/site';
 const SITE_PORT = 3000;
 const HOST_FWD = '127.0.0.1:8081';
 
-// Absolute minimum allow set for clone + apt + npm install. Each rule is
+// Absolute minimum allow set for clone + apt + npm ci. Each rule is
 // narrowed by host (and method/path where the upstream supports it).
 function ruleFor(client: string): AddProxyAllowRequest[] {
   return [
@@ -93,7 +93,7 @@ ls -la >/var/log/site-listing.txt
 # Node ignores the OS trust store; point it at slicer's MITM CA explicitly.
 export NODE_EXTRA_CA_CERTS=$(ls /etc/ssl/certs/slicer-agent-*.pem | head -1)
 echo "NODE_EXTRA_CA_CERTS=$NODE_EXTRA_CA_CERTS" >>/var/log/node-version.txt
-npm install --no-audit --no-fund >/var/log/npm-install.log 2>&1
+npm ci --no-audit --no-fund >/var/log/npm-install.log 2>&1
 
 mkdir -p /etc/slicer
 touch /etc/slicer/userdata-ran
