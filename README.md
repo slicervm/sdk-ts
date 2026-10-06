@@ -33,6 +33,22 @@ for await (const f of vm.bg.logs(bg.execId, { follow: true })) {
 await vm.delete();
 ```
 
+## Standalone daemon shutdown
+
+Stop the daemon through its known socket or HTTP(S) URL, without looking up a
+PID. TCP connections use the configured bearer token as usual.
+
+```ts
+const client = new SlicerClient({ baseURL: '/absolute/path/to/private/slicer.sock' });
+await client.shutdownDaemon({ signal: AbortSignal.timeout(30_000) });
+```
+
+This sends `POST /daemon/shutdown` and returns when the daemon accepts it with
+`202 Accepted`, before VM cleanup finishes. Cancelling the request does not undo
+an accepted shutdown. The daemon uses its SIGTERM lifecycle, including configured
+graceful shutdown, suspend policy, and persistent VM restart intentions. A
+supervisor configured with `Restart=always` may restart it automatically.
+
 ## Cold forks
 
 A stopped persistent VM can be committed as an immutable disk parent, then

@@ -6,7 +6,7 @@
  *   client.vms.create(group, req, opts) → VM / get(name) / list() / stats() / attach(group, name)
  *   client.commits.list() / fork(id) / delete(id)
  *   client.secrets.list / create / patch / delete
- *   client.getInfo()
+ *   client.getInfo() / shutdownDaemon()
  *
  * Per-VM operations live on the `VM` handle returned from `client.vms.create`
  * or `client.vms.attach`: `vm.exec`, `vm.execBuffered`, `vm.fs.*`,
@@ -46,6 +46,18 @@ export class SlicerClient {
       baseURL,
       ...(token !== undefined && { token }),
       ...(overrides.userAgent !== undefined && { userAgent: overrides.userAgent }),
+    });
+  }
+
+  /**
+   * Request shutdown of the selected daemon, using its SIGTERM lifecycle.
+   * Returns after 202 acceptance, before VM cleanup finishes. A supervisor
+   * configured to restart the daemon may bring it back automatically.
+   */
+  async shutdownDaemon(opts: { signal?: AbortSignal } = {}): Promise<void> {
+    await this.transport.request<void>('POST', '/daemon/shutdown', undefined, {
+      ...opts,
+      expectedStatus: 202,
     });
   }
 
