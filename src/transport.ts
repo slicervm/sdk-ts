@@ -92,7 +92,12 @@ export class TransportClient {
   }
 
   /** Buffered JSON request. Rejects on non-2xx via SlicerAPIError. */
-  request<T = unknown>(method: string, reqPath: string, body?: unknown): Promise<T> {
+  request<T = unknown>(
+    method: string,
+    reqPath: string,
+    body?: unknown,
+    opts: { signal?: AbortSignal; expectedStatus?: number } = {},
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
       const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
       const headers: Record<string, string> = {};
@@ -101,14 +106,18 @@ export class TransportClient {
         headers['Content-Length'] = String(payload.length);
       }
       const req = this.agent().request(
-        this.buildRequestOptions(method, reqPath, headers),
+        { ...this.buildRequestOptions(method, reqPath, headers), signal: opts.signal },
         (res: IncomingMessage) => {
           const chunks: Buffer[] = [];
           res.on('data', (c) => chunks.push(c));
           res.on('end', () => {
             const raw = Buffer.concat(chunks).toString('utf8');
             const status = res.statusCode ?? 0;
-            if (status < 200 || status >= 300) {
+            if (
+              opts.expectedStatus !== undefined
+                ? status !== opts.expectedStatus
+                : status < 200 || status >= 300
+            ) {
               reject(new SlicerAPIError(method, reqPath, status, raw));
               return;
             }
