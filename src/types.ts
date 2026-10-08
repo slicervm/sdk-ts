@@ -20,6 +20,12 @@ export interface VMInfo {
   ramBytes?: number;
   cpus?: number;
   createdAt: string;
+  /**
+   * Last accepted initiation of exec, background exec, shell, copy, or a
+   * forwarded connection. Continuing work does not refresh this timestamp.
+   * Omitted when unset or when the daemon does not support it.
+   */
+  lastAgentCall?: string;
   arch?: string;
   tags?: string[];
   status?: string;
@@ -422,6 +428,8 @@ export interface VMDescription {
   ramBytes?: number;
   cpus?: number;
   createdAt?: string;
+  /** Last accepted guest-agent operation; see VMInfo.lastAgentCall. */
+  lastAgentCall?: string;
   arch?: string;
   tags?: string[];
   status?: string;
@@ -431,6 +439,27 @@ export interface VMDescription {
   commitId?: string;
   parentCommitId?: string;
   network: VMNetworkDescription;
+  /**
+   * Connections currently proxied for this launch. Zero does not rule out
+   * running background jobs. Omitted by older daemons.
+   */
+  openAgentConnections?: number;
+  /**
+   * Jobs known to the guest agent, including exited jobs not yet reaped.
+   * Omitted means unknown (query unavailable or unsupported); [] means
+   * the registry was queried successfully and contains no jobs.
+   */
+  bgExecs?: BgExecSummary[];
+}
+
+/** Background job summary returned by VM.describe(). Use vm.bg.info for full detail. */
+export interface BgExecSummary {
+  execId: string;
+  command?: string;
+  pid?: number;
+  state?: string;
+  startedAt?: string;
+  exitCode?: number;
 }
 
 export interface VMStat {

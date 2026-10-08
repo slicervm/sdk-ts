@@ -386,7 +386,7 @@ export class VM {
     return this.transport.request<VMLogs>('GET', `/vm/${encodeURIComponent(this.hostname)}/logs`);
   }
 
-  /** Return configuration, fork lineage, and effective network policy. */
+  /** Return configuration, fork lineage, network policy, and guest-agent activity. */
   async describe(): Promise<VMDescription> {
     const wire = await this.transport.request<WireVMDescription>(
       'GET',

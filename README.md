@@ -49,6 +49,27 @@ an accepted shutdown. The daemon uses its SIGTERM lifecycle, including configure
 graceful shutdown, suspend policy, and persistent VM restart intentions. A
 supervisor configured with `Restart=always` may restart it automatically.
 
+## Guest-agent activity
+
+VM lists expose `lastAgentCall`, the time an accepted exec, background exec,
+shell, copy, or forwarded connection began. Continuing work does not refresh
+it, and metadata and health queries do not stamp it. Unset timestamps are omitted.
+
+```ts
+const vms = await client.vms.list();
+console.log(vms.map((vm) => [vm.hostname, vm.lastAgentCall]));
+
+const activity = await vm.describe();
+console.log(activity.lastAgentCall, activity.openAgentConnections, activity.bgExecs);
+```
+
+`openAgentConnections` counts connections the daemon currently proxies for
+that launch. Background jobs can run with zero connections. `bgExecs` includes
+running jobs and exited jobs not yet reaped: `undefined` means unknown or
+unavailable; `[]` means the registry was queried and has no jobs. These fields
+are optional for older daemons. Treat this as inspection data, not a guarantee
+that shutdown is safe.
+
 ## Cold forks
 
 A stopped persistent VM can be committed as an immutable disk parent, then
