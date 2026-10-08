@@ -53,7 +53,7 @@ supervisor configured with `Restart=always` may restart it automatically.
 
 VM lists expose `lastAgentCall`, the time an accepted exec, background exec,
 shell, copy, or forwarded connection began. Continuing work does not refresh
-it, and read-only requests do not stamp it. Unset timestamps are omitted.
+it, and metadata and health queries do not stamp it. Unset timestamps are omitted.
 
 ```ts
 const vms = await client.vms.list();
