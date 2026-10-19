@@ -316,6 +316,8 @@ export interface ShutdownRequest {
 }
 
 export interface VMCommitOptions {
+  /** Default: disk (stopped persistent VM). Memory captures a live VM on supported daemons. */
+  mode?: 'disk' | 'memory';
   tags?: string[];
   labels?: Record<string, string>;
   cacheKey?: string;
@@ -383,11 +385,11 @@ export interface VMForkOptions {
   secrets?: string[];
   /** Defaults to true; false makes the fork ephemeral. */
   persistent?: boolean;
-  /** Omit for all correctness fix-ups; pass an empty array to disable them. */
+  /** Omit for all correctness fix-ups; disk forks may use [] to disable them. */
   fixups?: VMForkFixup[];
-  /** Child vCPU count, up to the source host-group limit. */
+  /** Disk forks only: child vCPU count, up to the source host-group limit. */
   vcpu?: number;
-  /** Child RAM in bytes, up to the source host-group limit. */
+  /** Disk forks only: child RAM in bytes, up to the source host-group limit. */
   ramBytes?: number;
 }
 

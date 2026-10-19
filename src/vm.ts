@@ -473,7 +473,7 @@ export class VM {
   }
 
   /**
-   * Commit a stopped persistent VM disk into an immutable parent.
+   * Commit a stopped persistent VM disk, or capture a live VM with mode: memory.
    */
   async commit(opts: VMCommitOptions = {}): Promise<CommittedVM> {
     const cacheKey = opts.cacheKey?.trim();
@@ -481,8 +481,9 @@ export class VM {
     const labels =
       opts.labels && Object.keys(opts.labels).length > 0 ? opts.labels : undefined;
     const body =
-      tags !== undefined || labels !== undefined || cacheKey
+      opts.mode !== undefined || tags !== undefined || labels !== undefined || cacheKey
         ? {
+            ...(opts.mode !== undefined && { mode: opts.mode }),
             ...(tags !== undefined && { tags }),
             ...(labels !== undefined && { labels }),
             ...(cacheKey && { cache_key: cacheKey }),

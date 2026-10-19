@@ -85,6 +85,23 @@ await vm.delete();
 await client.commits.delete(parent.commitId);
 ```
 
+## Memory forks
+
+On supported Linux Firecracker configurations, capture a running VM's disk and
+memory without shutting down the source:
+
+```ts
+const checkpoint = await vm.commit({ mode: 'memory', cacheKey: 'prepared-v1' });
+const child = await checkpoint.fork({ wait: 'agent', waitTimeoutSec: 60 });
+
+await child.delete();
+await client.commits.delete(checkpoint.commitId);
+```
+
+Memory forks resume captured processes and retain the source CPU/RAM allocation.
+They require the daemon's identity fix-ups. Omitting `mode` continues to create a
+disk commit; `mode: 'disk'` selects that behavior explicitly.
+
 ## Examples
 
 - [slicer-x11](https://github.com/alexellis/slicer-x11) — a disposable cloud
