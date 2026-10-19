@@ -315,6 +315,13 @@ export interface ShutdownRequest {
   action?: 'shutdown' | 'reboot';
 }
 
+export interface RestoreOptions {
+  /** Server-side wait: `"agent"` waits for the guest agent to become ready. */
+  wait?: 'agent';
+  /** Wait timeout in seconds. Omitted, zero, or negative uses the daemon default; must be finite when waiting. */
+  timeoutSec?: number;
+}
+
 export interface VMCommitOptions {
   /** Default: disk (stopped persistent VM). Memory captures a live VM on supported daemons. */
   mode?: 'disk' | 'memory';
