@@ -76,19 +76,20 @@ export class VMsAPI {
     req: CreateVMRequest = {},
     opts: CreateVMOptions = {},
   ): Promise<VM> {
+    const group = await this.resolveHostGroup(hostGroup);
     const qs = new URLSearchParams();
     if (opts.wait) qs.set('wait', opts.wait);
     if (opts.waitTimeoutSec !== undefined) qs.set('timeout', `${opts.waitTimeoutSec}s`);
     const query = qs.toString() ? `?${qs.toString()}` : '';
     const wire = await this.transport.request<WireCreateVMResponse>(
       'POST',
-      `/hostgroup/${encodeURIComponent(hostGroup)}/nodes${query}`,
+      `/hostgroup/${encodeURIComponent(group)}/nodes${query}`,
       createVMReqToWire(req),
     );
     const res = createVMResFromWire(wire);
     return new VM(this.transport, {
       hostname: res.hostname,
-      hostGroup: res.hostGroup ?? hostGroup,
+      hostGroup: res.hostGroup ?? group,
       ...(res.ip !== undefined && { ip: res.ip }),
       ...(res.createdAt !== undefined && { createdAt: res.createdAt }),
       ...(res.arch !== undefined && { arch: res.arch }),
@@ -140,16 +141,36 @@ export class VMsAPI {
     req: CreateVMRequest = {},
     opts: CreateVMOptions = {},
   ): Promise<CreateVMResponse> {
+    const group = await this.resolveHostGroup(hostGroup);
     const qs = new URLSearchParams();
     if (opts.wait) qs.set('wait', opts.wait);
     if (opts.waitTimeoutSec !== undefined) qs.set('timeout', `${opts.waitTimeoutSec}s`);
     const query = qs.toString() ? `?${qs.toString()}` : '';
     const wire = await this.transport.request<WireCreateVMResponse>(
       'POST',
-      `/hostgroup/${encodeURIComponent(hostGroup)}/nodes${query}`,
+      `/hostgroup/${encodeURIComponent(group)}/nodes${query}`,
       createVMReqToWire(req),
     );
     return createVMResFromWire(wire);
+  }
+
+  /**
+   * Resolve the host group for a create. An empty string is treated as "use
+   * the default" and resolved client-side by listing configured host groups —
+   * mirroring the Go SDK's `resolveDefaultHostGroup`. Picks the only group,
+   * and throws when there are zero or multiple.
+   */
+  private async resolveHostGroup(hostGroup: string): Promise<string> {
+    if (hostGroup.trim() !== '') return hostGroup;
+    const groups = await this.transport.request<WireHostGroup[]>('GET', '/hostgroup');
+    const names = (groups ?? [])
+      .map((g) => g.name)
+      .filter((n): n is string => n !== undefined && n !== '');
+    if (names.length === 1) return names[0] as string;
+    if (names.length === 0) throw new Error('slicer: no host groups configured');
+    throw new Error(
+      `slicer: host group is required when more than one is configured (have: ${names.join(', ')})`,
+    );
   }
 }
 

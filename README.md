@@ -33,6 +33,10 @@ for await (const f of vm.bg.logs(bg.execId, { follow: true })) {
 await vm.delete();
 ```
 
+An empty hostgroup name in `client.vms.create()` or `createRaw()` selects the
+only configured hostgroup. If there are zero or multiple groups, the SDK rejects
+the request; pass an explicit group name when more than one is configured.
+
 ## Standalone daemon shutdown
 
 Stop the daemon through its known socket or HTTP(S) URL, without looking up a
