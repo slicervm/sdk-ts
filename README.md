@@ -85,6 +85,18 @@ await vm.delete();
 await client.commits.delete(parent.commitId);
 ```
 
+## Restore readiness
+
+Wait for the guest agent before using a restored snapshot on supporting daemons:
+
+```ts
+await vm.restore({ wait: 'agent', timeoutSec: 60 });
+```
+
+Omitted, zero and negative timeouts use the daemon default. Nonfinite wait
+timeouts are rejected. Calling `restore()` without options keeps its existing
+behavior and returns without waiting for agent readiness.
+
 ## Memory forks
 
 On supported Linux Firecracker configurations, capture a running VM's disk and

@@ -25,6 +25,7 @@ import {
   type FSMkdirRequest,
   type FSWatchEvent,
   type FSWatchRequest,
+  type RestoreOptions,
   type ShutdownRequest,
   SlicerAPIError,
   type VMCommitOptions,
@@ -462,14 +463,29 @@ export class VM {
     await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/relaunch`);
   }
 
-  /** Mac-only on current daemons. Throws `SlicerAPIError 404` on Linux. */
+  /** Snapshot to disk on supported Linux Firecracker and Mac configurations. */
   async suspend(): Promise<void> {
     await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/suspend`);
   }
 
-  /** Mac-only on current daemons. Throws `SlicerAPIError 404` on Linux. */
-  async restore(): Promise<void> {
-    await this.transport.request('POST', `/vm/${encodeURIComponent(this.hostname)}/restore`);
+  /** Restore a snapshot. Server-side agent waiting requires a supporting daemon. */
+  async restore(opts: RestoreOptions = {}): Promise<void> {
+    const q = new URLSearchParams();
+    if (opts.wait) {
+      q.set('wait', opts.wait);
+      if (opts.timeoutSec !== undefined) {
+        if (!Number.isFinite(opts.timeoutSec)) {
+          throw new RangeError('restore timeoutSec must be finite');
+        }
+        // Match the Go SDK: non-positive timeouts use the daemon default.
+        if (opts.timeoutSec > 0) q.set('timeout', `${opts.timeoutSec}s`);
+      }
+    }
+    const query = q.toString() ? `?${q.toString()}` : '';
+    await this.transport.request(
+      'POST',
+      `/vm/${encodeURIComponent(this.hostname)}/restore${query}`,
+    );
   }
 
   /**
