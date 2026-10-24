@@ -36,6 +36,7 @@ export interface WireVM {
   ram_bytes?: number;
   cpus?: number;
   created_at: string;
+  last_agent_call?: string;
   arch?: string;
   tags?: string[];
   status?: string;
@@ -122,6 +123,15 @@ export interface WireVMDescription extends WireVM {
   image?: string;
   commit_id?: string;
   parent_commit_id?: string;
+  open_agent_connections?: number;
+  bg_execs?: {
+    exec_id: string;
+    command?: string;
+    pid?: number;
+    state?: string;
+    started_at?: string;
+    exit_code?: number;
+  }[];
   network: {
     mode?: string;
     policy_source?: string;
@@ -172,6 +182,7 @@ export function vmFromWire(w: WireVM): VMInfo {
     hostname: w.hostname,
     ip: w.ip,
     createdAt: w.created_at,
+    ...(w.last_agent_call !== undefined && { lastAgentCall: w.last_agent_call }),
     ...(w.hostgroup !== undefined && { hostGroup: w.hostgroup }),
     ...(w.ram_bytes !== undefined && { ramBytes: w.ram_bytes }),
     ...(w.cpus !== undefined && { cpus: w.cpus }),
@@ -271,6 +282,7 @@ export function vmDescriptionFromWire(w: WireVMDescription): VMDescription {
     ...(w.ram_bytes !== undefined && { ramBytes: w.ram_bytes }),
     ...(w.cpus !== undefined && { cpus: w.cpus }),
     ...(w.created_at !== undefined && { createdAt: w.created_at }),
+    ...(w.last_agent_call !== undefined && { lastAgentCall: w.last_agent_call }),
     ...(w.arch !== undefined && { arch: w.arch }),
     ...(w.tags !== undefined && { tags: w.tags }),
     ...(w.status !== undefined && { status: w.status }),
@@ -279,6 +291,19 @@ export function vmDescriptionFromWire(w: WireVMDescription): VMDescription {
     ...(w.image !== undefined && { image: w.image }),
     ...(w.commit_id !== undefined && { commitId: w.commit_id }),
     ...(w.parent_commit_id !== undefined && { parentCommitId: w.parent_commit_id }),
+    ...(w.open_agent_connections !== undefined && {
+      openAgentConnections: w.open_agent_connections,
+    }),
+    ...(w.bg_execs !== undefined && {
+      bgExecs: w.bg_execs.map((job) => ({
+        execId: job.exec_id,
+        ...(job.command !== undefined && { command: job.command }),
+        ...(job.pid !== undefined && { pid: job.pid }),
+        ...(job.state !== undefined && { state: job.state }),
+        ...(job.started_at !== undefined && { startedAt: job.started_at }),
+        ...(job.exit_code !== undefined && { exitCode: job.exit_code }),
+      })),
+    }),
     network: {
       ...(w.network.mode !== undefined && { mode: w.network.mode }),
       ...(w.network.policy_source !== undefined && { policySource: w.network.policy_source }),
