@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { agentHealthFromWire, createVMReqToWire } from '../src/wire.js';
 
 describe('createVMReqToWire', () => {
+  it('omits network to preserve the creation default', () => {
+    expect(JSON.parse(JSON.stringify(createVMReqToWire({})))).not.toHaveProperty('network');
+  });
+
+  it('serializes an explicit offline attachment', () => {
+    const network = { mode: 'none' } as const;
+    expect(JSON.parse(JSON.stringify(createVMReqToWire({ network })))).toEqual({ network });
+  });
+
   it('passes isolated network launch overrides through to wire JSON', () => {
     expect(
       createVMReqToWire({

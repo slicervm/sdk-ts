@@ -2,6 +2,18 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SlicerClient } from '../src/index.js';
+import { buildForkRequest } from '../src/fork.js';
+
+describe('fork network attachment', () => {
+  it('omits network to use the host group network', () => {
+    expect(buildForkRequest({}).body).toBeUndefined();
+  });
+
+  it('serializes an explicit offline attachment', () => {
+    const network = { mode: 'none' } as const;
+    expect(JSON.parse(JSON.stringify(buildForkRequest({ network }).body))).toEqual({ network });
+  });
+});
 
 describe('cold fork workflow', () => {
   let server: http.Server | undefined;
