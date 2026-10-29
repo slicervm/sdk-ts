@@ -58,6 +58,7 @@ export interface WireCreateVMRequest {
 }
 
 export interface WireCreateVMNetworkPolicy {
+  mode?: 'none';
   allow?: string[];
   drop?: string[];
 }

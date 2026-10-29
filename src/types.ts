@@ -38,11 +38,13 @@ export interface VMTagUpdate {
 }
 
 /**
- * Per-launch network policy override for isolated host groups.
+ * Network attachment selection or isolated-network policy override.
  * Omitted lists inherit the host group's policy. Empty lists intentionally
  * clear that list for this VM launch.
  */
 export interface CreateVMNetworkPolicy {
+  /** Attach no NIC. Omit to use the host group's network. */
+  mode?: 'none';
   allow?: string[];
   drop?: string[];
 }
@@ -364,8 +366,10 @@ export interface VMCommitDeleteResponse {
   status: string;
 }
 
-/** Isolated-network policy override for a forked VM. */
+/** Network attachment or isolated-network policy override for a forked VM. */
 export interface VMForkNetworkPolicy {
+  /** Attach no NIC. Omit to use the host group's network, even for an offline commit. */
+  mode?: 'none';
   /** Omit to inherit; pass an empty array to clear the allow list. */
   allow?: string[];
   /** Omit to inherit; pass an empty array to clear the drop list. */

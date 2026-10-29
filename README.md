@@ -37,6 +37,29 @@ An empty hostgroup name in `client.vms.create()` or `createRaw()` selects the
 only configured hostgroup. If there are zero or multiple groups, the SDK rejects
 the request; pass an explicit group name when more than one is configured.
 
+## Network selection
+
+Set `network.mode` to `none` to attach no network device and allocate no
+IP lease on Linux (Firecracker) or macOS. Shell, exec, and file copy remain
+available over vsock. Omitting the mode uses the host group's network.
+
+```ts
+const offline = await client.vms.create('sbox', { network: { mode: 'none' } });
+```
+
+Given a stopped, persistent `source` VM prepared online, commit its filesystem,
+delete the source, and fork offline:
+
+```ts
+const parent = await source.commit();
+await source.delete();
+const child = await parent.fork({ network: { mode: 'none' } });
+```
+
+Forks also use the host group's network when mode is omitted, including
+forks of offline commits. Pass `mode: 'none'` explicitly for every offline
+fork. Requires a compatible Slicer daemon version.
+
 ## Standalone daemon shutdown
 
 Stop the daemon through its known socket or HTTP(S) URL, without looking up a
